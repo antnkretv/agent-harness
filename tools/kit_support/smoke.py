@@ -887,13 +887,14 @@ class Smoke:
 
 def dotnet_sdk() -> list[str]:
     """SDK фикстуры ставит тот же скрипт поставки, что и проекту: smoke на машине без него и в CI идет одинаково."""
-    done = subprocess.run(["bash", str(KIT / "payload" / ".harness" / "provisioning" / "scripts" / "ensure-dotnet-sdk.sh"),
-                           "--repo", str(KIT / "tools" / "fixtures" / "dotnet" / "src"), "--no-runtimes"],
-                          capture_output=True, text=True, encoding="utf-8")
+    done = run(["bash", (KIT / "payload" / ".harness" / "provisioning" / "scripts" / "ensure-dotnet-sdk.sh").as_posix(),
+                "--repo", (KIT / "tools" / "fixtures" / "dotnet" / "src").as_posix(), "--no-runtimes"], KIT)
     if done.returncode != 0:
         print(done.stdout + done.stderr, flush=True)
         return [msg("kit_smoke_dotnet_sdk", done.returncode)]
-    root = os.environ.get("DOTNET_INSTALL_DIR") or str(Path.home() / ".dotnet")
+    root = [line.partition("=")[2] for line in done.stdout.splitlines() if line.startswith("DOTNET_ROOT=")][-1]
+    if os.name == "nt":
+        root = run(["bash", "-c", 'cygpath -w "$0"', root], KIT).stdout.strip()
     ENV.update(DOTNET_ROOT=root, PATH=os.pathsep.join([root, ENV.get("PATH", "")]))
     return []
 
