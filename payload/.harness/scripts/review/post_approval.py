@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import fnmatch
 import functools
+import os
 import re
 import subprocess
+import time
 from dataclasses import dataclass
 
-from ci_common import ROOT, check_context, get_record, msg
+from ci_common import GIT_LOW_SPEED, ROOT, check_context, get_record, git_auth, msg
 from text_scan import TESTS
 
 PIPELINE = "methodology.json"
 DEPTH = 100
+TRIES = 3
 SUMMARY = re.compile(r"(OK  |SKIP|FAIL|ERR |NONE) (.+?) \(\d+ s\)")
 TOKEN = re.compile(r"[\s'\"`()\[\]{}<>,;=|]+")
 
@@ -37,16 +40,15 @@ def present(*shas: str) -> bool:
 
 
 def pulled(*refs: str) -> None:
-    import os
-    import time
-
     import forge
-    from review_round import LOW_SPEED, TRIES
 
-    env = forge.git_env({**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    try:
+        env = {**(git_auth() or os.environ), "GIT_TERMINAL_PROMPT": "0"}
+    except forge.ForgeError:
+        return
     shallow = git("rev-parse", "--is-shallow-repository").stdout.strip() == "true"
-    command = ["git", *(part for key, value in LOW_SPEED for part in ("-c", f"{key}={value}")), "fetch", "--quiet", "--no-tags",
-               *([f"--depth={DEPTH}"] if shallow else []), "origin", *refs]
+    command = ["git", *(part for key, value in GIT_LOW_SPEED for part in ("-c", f"{key}={value}")), "fetch",
+               "--quiet", "--no-tags", *([f"--depth={DEPTH}"] if shallow else []), "origin", *refs]
     for number in range(1, TRIES + 1):
         if subprocess.run(command, cwd=ROOT, env=env, capture_output=True, check=False).returncode == 0:
             return

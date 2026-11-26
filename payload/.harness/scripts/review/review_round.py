@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from ci_common import ROOT, bash, agent_run_command, forge, get, msg, place_trusted, placed_digest, tracker
+from ci_common import GIT_LOW_SPEED, ROOT, bash, agent_run_command, forge, get, msg, place_trusted, placed_digest, tracker
 
 PIPELINE = "methodology.json"
 
@@ -42,7 +42,6 @@ PLAN_LIMIT = 64 * 1024
 HEAD_REF = "refs/review/head"
 BASE_REF = "refs/review/base"
 
-LOW_SPEED = (("http.lowSpeedLimit", "1024"), ("http.lowSpeedTime", "60"))
 
 VERDICT_STATES = ("approved", "changes", "commented")
 
@@ -344,7 +343,7 @@ def checkout(tree: str, plan: dict) -> str:
         os.makedirs(tree)
         git(tree, "init", "--quiet")
         git(tree, "remote", "add", "origin", forge.clone_url())
-        for key, value in LOW_SPEED:
+        for key, value in GIT_LOW_SPEED:
             git(tree, "config", key, value)
         git(tree, "fetch", "--quiet", "--no-tags", f"--depth={FETCH_DEPTH}", "origin", *refs, env=env)
 
