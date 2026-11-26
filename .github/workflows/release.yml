@@ -42,10 +42,7 @@ jobs:
           node-version-file: tools/fixtures/node/.node-version
       - name: Smoke tools
         if: steps.version.outputs.skip != 'true'
-        run: |
-          bash payload/.harness/provisioning/scripts/ensure-vale.sh
-          bash payload/.harness/provisioning/scripts/ensure-shellcheck.sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        run: bash tools/smoke-tools.sh --github
       - name: Kit check
         if: steps.version.outputs.skip != 'true'
         run: python3 tools/kit.py check --adapters

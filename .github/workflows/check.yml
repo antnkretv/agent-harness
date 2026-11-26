@@ -26,12 +26,9 @@ jobs:
         with:
           node-version-file: tools/fixtures/node/.node-version
       # Флаг --ci скриптов установки пишет PATH через адаптер площадки проекта, а у репозитория комплекта
-      # манифеста проекта нет: каталоги инструментов шаг передает следующим шагам сам.
+      # манифеста проекта нет: каталоги инструментов следующим шагам передает tools/smoke-tools.sh.
       - name: Smoke tools
-        run: |
-          bash payload/.harness/provisioning/scripts/ensure-vale.sh
-          bash payload/.harness/provisioning/scripts/ensure-shellcheck.sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        run: bash tools/smoke-tools.sh --github
       - name: Prompt probes self-test
         run: python3 tests/prompt-probes/run.py --self-test
       - name: Kit check

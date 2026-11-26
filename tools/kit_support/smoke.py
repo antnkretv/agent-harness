@@ -885,27 +885,7 @@ class Smoke:
                 self.expect(msg("smoke_pack_verify"), self.harness("verify", "--no-gates"))
 
 
-def dotnet_sdk() -> list[str]:
-    """SDK фикстуры ставит тот же скрипт поставки, что и проекту: smoke на машине без него и в CI идет одинаково."""
-    done = run(["bash", (KIT / "payload" / ".harness" / "provisioning" / "scripts" / "ensure-dotnet-sdk.sh").as_posix(),
-                "--repo", (KIT / "tools" / "fixtures" / "dotnet" / "src").as_posix(), "--no-runtimes"], KIT)
-    if done.returncode != 0:
-        print(done.stdout + done.stderr, flush=True)
-        return [msg("kit_smoke_dotnet_sdk", done.returncode)]
-    root = [line.partition("=")[2] for line in done.stdout.splitlines() if line.startswith("DOTNET_ROOT=")][-1]
-    if os.name == "nt":
-        native = run(["bash", "-c", 'cygpath -w "$0"', root], KIT)
-        if native.returncode != 0 or not native.stdout.strip():
-            print(native.stdout + native.stderr, flush=True)
-            return [msg("kit_smoke_dotnet_sdk", native.returncode)]
-        root = native.stdout.strip()
-    ENV.update(DOTNET_ROOT=root, PATH=os.pathsep.join([root, ENV.get("PATH", "")]))
-    return []
-
-
 def smoke(kit_folder: Path, adapters: list[str], kit: dict) -> list[str]:
-    if "dotnet" in adapters and (problems := dotnet_sdk()):
-        return problems
     with tempfile.TemporaryDirectory() as folder:
         ENV["AGENT_HARNESS_CACHE"] = str(Path(folder) / "cache")
         scenario = Smoke(kit_folder, adapters, Path(folder))
