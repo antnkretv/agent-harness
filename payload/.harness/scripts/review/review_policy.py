@@ -172,8 +172,11 @@ def reopened(marks: list[Mark], head: str) -> str:
     if not approved or approved == head:
         return ""
     fix = post_approval.judge(approved, head)
-    print(annotation("notice", "plan_fix_accepted" if fix.accepted else "plan_fix_reopened", approved[:9], fix.why))
-    return "" if fix.accepted else approved
+    if fix.accepted:
+        print(annotation("notice", "plan_fix_accepted", approved[:9], fix.why))
+        return ""
+    print(annotation("notice", "plan_fix_reopened", approved[:9], fix.why))
+    return approved
 
 
 def route(marks: list[Mark], changed: list[str], head: str, base: str = "", policy: str = "", task: str = "") -> list[Route]:
