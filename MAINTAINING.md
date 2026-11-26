@@ -249,7 +249,10 @@ tar -xzf <каталог>/agent-harness-<версия>.tar.gz -C <каталог
 ```
 
 В PowerShell эти команды вызываются через `payload/.harness/hooks/python.ps1`. Полный smoke также
-нуждается в Git for Windows, Docker Desktop, Vale, ShellCheck и доступе к NuGet.
+нуждается в Git for Windows, Docker Desktop, Vale, ShellCheck и доступе к NuGet. SDK .NET из
+`global.json` фикстуры `tools/fixtures/dotnet/src` `kit.py check --adapters` ставит сам скриптом
+поставки `ensure-dotnet-sdk.sh`, как в CI: нужен доступ к `dot.net` и каталог `DOTNET_INSTALL_DIR`
+или `~/.dotnet`.
 
 Архив собирает workflow проверки комплекта `.github/workflows/check.yml` и выкладывает его артефактом
 прогона `agent-harness`: архив PR скачивается со страницы прогона.

@@ -885,7 +885,22 @@ class Smoke:
                 self.expect(msg("smoke_pack_verify"), self.harness("verify", "--no-gates"))
 
 
+def dotnet_sdk() -> list[str]:
+    """SDK фикстуры ставит тот же скрипт поставки, что и проекту: smoke на машине без него и в CI идет одинаково."""
+    done = subprocess.run(["bash", str(KIT / "payload" / ".harness" / "provisioning" / "scripts" / "ensure-dotnet-sdk.sh"),
+                           "--repo", str(KIT / "tools" / "fixtures" / "dotnet" / "src"), "--no-runtimes"],
+                          capture_output=True, text=True, encoding="utf-8")
+    if done.returncode != 0:
+        print(done.stdout + done.stderr, flush=True)
+        return [msg("kit_smoke_dotnet_sdk", done.returncode)]
+    root = os.environ.get("DOTNET_INSTALL_DIR") or str(Path.home() / ".dotnet")
+    ENV.update(DOTNET_ROOT=root, PATH=os.pathsep.join([root, ENV.get("PATH", "")]))
+    return []
+
+
 def smoke(kit_folder: Path, adapters: list[str], kit: dict) -> list[str]:
+    if "dotnet" in adapters and (problems := dotnet_sdk()):
+        return problems
     with tempfile.TemporaryDirectory() as folder:
         ENV["AGENT_HARNESS_CACHE"] = str(Path(folder) / "cache")
         scenario = Smoke(kit_folder, adapters, Path(folder))

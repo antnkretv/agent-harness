@@ -31,10 +31,7 @@ jobs:
         run: |
           bash payload/.harness/provisioning/scripts/ensure-vale.sh
           bash payload/.harness/provisioning/scripts/ensure-shellcheck.sh
-          bash payload/.harness/provisioning/scripts/ensure-dotnet-sdk.sh --repo tools/fixtures/dotnet/src --no-runtimes
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          echo "$HOME/.dotnet" >> "$GITHUB_PATH"
-          echo "DOTNET_ROOT=$HOME/.dotnet" >> "$GITHUB_ENV"
       - name: Prompt probes self-test
         run: python3 tests/prompt-probes/run.py --self-test
       - name: Kit check
