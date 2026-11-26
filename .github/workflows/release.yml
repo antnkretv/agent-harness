@@ -1,17 +1,18 @@
-# Выпуск комплекта: тег v<версия> на коммите master проходит проверку комплекта, собирает архив и
-# публикует его с файлом sha256 в выпуске GitHub; повтор задания только дозагружает недостающие файлы.
-# Загрузчик проекта и ah upgrade скачивают архив по адресу выпуска, а lock проекта закрепляет sha256.
+# Выпуск комплекта: пуш в master с версией kit.json, у которой еще нет тега, проходит проверку комплекта,
+# собирает архив и публикует выпуск v<версия> с файлом sha256; тег на этом коммите создает сам выпуск.
+# Повтор задания только дозагружает недостающие файлы. Загрузчик проекта и ah upgrade скачивают архив по
+# адресу выпуска, а lock проекта закрепляет sha256.
 name: release
 
 on:
   push:
-    tags: ["v*"]
+    branches: [master]
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
@@ -23,17 +24,24 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
-      - name: Tag on master
-        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/master || { echo "::error::тег $GITHUB_REF_NAME стоит не на коммите master"; exit 1; }
-      - name: Tag matches kit.json
+      # Версия без подъема в kit.json уже выпущена с другого коммита: такой пуш выпуска не делает.
+      - name: Version
+        id: version
         run: |
-          version="$(python3 -c 'import json; print(json.load(open("kit.json"))["version"])')"
-          test "v$version" = "$GITHUB_REF_NAME" || { echo "::error::тег $GITHUB_REF_NAME, а kit.json называет версию $version"; exit 1; }
+          tag="v$(python3 -c 'import json; print(json.load(open("kit.json"))["version"])')"
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          tagged="$(git rev-parse -q --verify "refs/tags/$tag^{commit}" || true)"
+          if [ -n "$tagged" ] && [ "$tagged" != "$GITHUB_SHA" ]; then
+            echo "::notice::версия $tag уже выпущена с коммита $tagged: поднимите version в kit.json"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Setup Node
+        if: steps.version.outputs.skip != 'true'
         uses: actions/setup-node@v6
         with:
           node-version-file: tools/fixtures/node/.node-version
       - name: Smoke tools
+        if: steps.version.outputs.skip != 'true'
         run: |
           bash payload/.harness/provisioning/scripts/ensure-vale.sh
           bash payload/.harness/provisioning/scripts/ensure-shellcheck.sh
@@ -42,38 +50,51 @@ jobs:
           echo "$HOME/.dotnet" >> "$GITHUB_PATH"
           echo "DOTNET_ROOT=$HOME/.dotnet" >> "$GITHUB_ENV"
       - name: Kit check
+        if: steps.version.outputs.skip != 'true'
         run: python3 tools/kit.py check --adapters
       - name: Build archive
+        if: steps.version.outputs.skip != 'true'
         run: |
           python3 tools/kit.py build --out dist
           cd dist && for archive in *.tar.gz; do sha256sum "$archive" > "$archive.sha256"; done
       - name: Publish release
+        if: steps.version.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         # Опубликованный архив уже закреплен в lock проектов, а байты сжатия зависят от раннера: повтор
         # не перезаписывает файл выпуска, а догружает недостающий, sha256 считает по опубликованному архиву и
-        # публикует выпуск, если прерванное задание оставило его черновиком.
+        # публикует выпуск, если прерванное задание оставило его черновиком. Черновик, который тег еще не
+        # создал, с другого коммита пересоздается: его файлы проектам недоступны.
         run: |
           set -euo pipefail
-          if ! gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/*.tar.gz.sha256 --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            target="$(gh release view "$TAG" --json targetCommitish --jq .targetCommitish)"
+            if [ "$target" != "$GITHUB_SHA" ]; then
+              if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]; then
+                echo "::error::выпуск $TAG опубликован с коммита $target: поднимите version в kit.json"; exit 1
+              fi
+              gh release delete "$TAG" --yes
+            fi
+          fi
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 --target "$GITHUB_SHA" --title "$TAG" --generate-notes
             exit 0
           fi
           mkdir -p published
-          if [ -n "$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')" ]; then
-            gh release download "$GITHUB_REF_NAME" --dir published
+          if [ -n "$(gh release view "$TAG" --json assets --jq '.assets[].name')" ]; then
+            gh release download "$TAG" --dir published
           fi
           for archive in dist/*.tar.gz; do
             name="$(basename "$archive")"
             if [ -f "published/$name" ]; then
               (cd published && sha256sum "$name") > "dist/$name.sha256"
             else
-              gh release upload "$GITHUB_REF_NAME" "$archive"
+              gh release upload "$TAG" "$archive"
             fi
             if [ ! -f "published/$name.sha256" ]; then
-              gh release upload "$GITHUB_REF_NAME" "dist/$name.sha256"
+              gh release upload "$TAG" "dist/$name.sha256"
             elif ! cmp -s "published/$name.sha256" "dist/$name.sha256"; then
               echo "::error::опубликованный $name.sha256 не сходится с архивом выпуска"; exit 1
             fi
           done
-          gh release edit "$GITHUB_REF_NAME" --draft=false
+          gh release edit "$TAG" --draft=false
