@@ -4,6 +4,7 @@
 #   tools/smoke-tools.sh            # строки export для файла окружения сессии - в stdout
 #   tools/smoke-tools.sh --github   # каталоги - в GITHUB_PATH и GITHUB_ENV следующих шагов CI
 # Каталог каждого инструмента берется из вывода его скрипта установки: путь к файлу или DOTNET_ROOT=.
+# gitleaks ставится, только когда Docker недоступен: с Docker скан идет через образ, как у проекта GitHub.
 set -euo pipefail
 
 kit="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,9 +13,17 @@ dirs=()
 add() {
   case " ${dirs[*]} " in *" $1 "*) ;; *) dirs+=("$1") ;; esac
 }
-for tool in vale shellcheck gitleaks; do
-  add "$(dirname "$(bash "$scripts/ensure-$tool.sh" | tail -n 1)")"
-done
+binary() {
+  local found
+  found="$(bash "$scripts/ensure-$1.sh" | tail -n 1)"
+  add "$(dirname "$found")"
+}
+
+binary vale
+binary shellcheck
+if ! docker info >/dev/null 2>&1; then
+  binary gitleaks
+fi
 dotnet="$(bash "$scripts/ensure-dotnet-sdk.sh" --repo "$kit/tools/fixtures/dotnet/src" --no-runtimes | tail -n 1)"
 dotnet="${dotnet#DOTNET_ROOT=}"
 add "$dotnet"

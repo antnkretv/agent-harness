@@ -224,9 +224,11 @@ payload/.harness/hooks/python.cmd tools/kit.py check --no-smoke      # без sm
 ```
 
 Smoke со сторонами и адаптерами нужны Vale, ShellCheck, gitleaks и SDK .NET по `global.json` фикстуры.
-Их ставит `tools/smoke-tools.sh`: в CI его зовет шаг `Smoke tools` проверки и выпуска, в сессии Claude Code
-в этом репозитории - SessionStart hook `.claude/hooks/session-start.sh`. Другой агент или машина
-разработчика ставят их той же командой: `eval "$(bash tools/smoke-tools.sh)"`.
+Их ставит `tools/smoke-tools.sh`: в CI его зовет шаг `Smoke tools` проверки и выпуска, в удаленной сессии
+Claude Code в этом репозитории - SessionStart hook `.claude/hooks/session-start.sh`. Локальная сессия,
+другой агент и машина разработчика ставят их той же командой: `eval "$(bash tools/smoke-tools.sh)"`.
+gitleaks скрипт ставит, только когда Docker недоступен: с Docker скан секретов идет через образ, как у
+установленного проекта GitHub, и smoke проверяет этот путь.
 
 Правка промпта ревью, шаблона текста или правила публикуемого текста в `payload` сверяется пробами
 промптов: обе версии, до и после правки, собирают свой комплект своим `kit.py`, ставят его в пустой
@@ -253,8 +255,8 @@ tar -xzf <каталог>/agent-harness-<версия>.tar.gz -C <каталог
 <каталог>/agent-harness-<версия>/payload/.harness/hooks/python.cmd <каталог>/agent-harness-<версия>/ah.py apply --target <проект> --archive <каталог>/agent-harness-<версия>.tar.gz
 ```
 
-В PowerShell эти команды вызываются через `payload/.harness/hooks/python.ps1`. Полный smoke также
-нуждается в Git for Windows, Docker Desktop, Vale, ShellCheck и доступе к NuGet.
+В PowerShell эти команды вызываются через `payload/.harness/hooks/python.ps1`. На Windows полный smoke
+также нуждается в Git for Windows, чей bash запускает `tools/smoke-tools.sh`, и в доступе к NuGet.
 
 Архив собирает workflow проверки комплекта `.github/workflows/check.yml` и выкладывает его артефактом
 прогона `agent-harness`: архив PR скачивается со страницы прогона.
