@@ -51,7 +51,7 @@ description: Упрощение диффа ветки - четыре агент�
 Дождись всех четырех агентов, объедини находки об одной строке или одном механизме и исправь каждую
 оставшуюся сам. Пропусти находку, если правка меняет задуманное поведение или ты считаешь находку ложной, и назови
 причину пропуска. Находку, правка которой выходит далеко за пределы диффа, обработай по политике
-попутных находок ([`CONTRIBUTING.md` §10](../../../CONTRIBUTING.md#10-находки-по-пути)). В конце
+попутных находок ([`.harness/CONTRIBUTING.md` §10](../../../.harness/CONTRIBUTING.md#10-находки-по-пути)). В конце
 коротко назови, что исправлено и что пропущено, в слотах заготовки
 `./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py form SimplifyReport --out <файл>` и собери итог командой
 `./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py render report/simplify --set-file SimplifyReport=<файл>`.

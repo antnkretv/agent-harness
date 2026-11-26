@@ -229,7 +229,7 @@ def install_kit(tree: str) -> subprocess.CompletedProcess | None:
     loader = os.path.join(tree, LOADER)
     try:
         with open(os.path.join(tree, LOCK), encoding="utf-8") as handle:
-            pinned = json.load(handle).get("kit", {}).get("sha256")
+            pinned = json.load(handle).get("kit", {}).get("tree")
     except (OSError, ValueError, AttributeError):
         pinned = None
     if not (os.path.isfile(loader) and pinned) or git("-C", tree, "ls-files", "--", METHODOLOGY_PATH):

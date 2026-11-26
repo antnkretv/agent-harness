@@ -4,7 +4,7 @@
       "id": "secret-scan",
       "enabled": true,
       "title": "Секреты не попадают в дерево и историю ветки",
-      "doc": "docs/platform/delivery/ci-cd.md",
+      "doc": ".harness/docs/ci-cd.md",
       "gate": ".gitleaks.toml"
     },
     {
@@ -18,21 +18,21 @@
       "id": "commit-format",
       "enabled": true,
       "title": "Conventional Commits, правила письма и объем сообщения коммита",
-      "doc": "CONTRIBUTING.md",
+      "doc": ".harness/CONTRIBUTING.md",
       "gate": ".harness/scripts/check/check-commits.py"
     },
     {
       "id": "findings-in-pr",
       "enabled": true,
       "title": "Попутная находка идет по политике agents.findings; при same-pr текст у поставщика кода не объявляет ее отложенной",
-      "doc": "CONTRIBUTING.md",
+      "doc": ".harness/CONTRIBUTING.md",
       "gate": ".harness/hooks/forge-text-lint.py"
     },
     {
       "id": "agent-signature",
       "enabled": true,
       "title": "Комментарий агента у поставщика кода несет подпись из authorship",
-      "doc": "docs/platform/delivery/ci-cd.md",
+      "doc": ".harness/docs/ci-cd.md",
       "gate": ".harness/hooks/forge-text-lint.py"
     },
     {
@@ -63,7 +63,7 @@
       "id": "harness-files",
       "enabled": true,
       "title": "Файл комплекта правится в комплекте, а проект держит свое в местах проекта",
-      "doc": "docs/platform/agents/harness.md#роли-файлов",
+      "doc": ".harness/docs/harness.md#роли-файлов",
       "gate": ".harness/scripts/check/check-harness-files.py"
     },
     {
@@ -77,28 +77,28 @@
       "id": "adr-reference",
       "enabled": true,
       "title": "Ссылка на решение несет область",
-      "doc": "docs/platform/adr/README.md",
+      "doc": ".harness/docs/adr.md",
       "gate": ".harness/scripts/check/check-adr-refs.py"
     },
     {
       "id": "tool-pins",
       "enabled": true,
       "title": "Версии тулчейна и пакетов живут в машинных манифестах, чужая оснастка агентов закреплена digest",
-      "doc": "docs/platform/agents/environment.md",
+      "doc": ".harness/docs/environment.md",
       "gate": ".harness/scripts/check/check-tool-pins.py"
     },
     {
       "id": "requirements-registry",
       "enabled": true,
       "title": "Запись реестра требований открыта, когда правится ее свидетельство",
-      "doc": "docs/platform/delivery/sdd.md#трассируемость-fr-nnn",
+      "doc": ".harness/docs/sdd.md#трассируемость-fr-nnn",
       "gate": ".harness/scripts/check/check-requirements-registry.py"
     },
     {
       "id": "docs-structure",
       "enabled": true,
       "title": "Ссылки, инструкции агентов и соглашения документов проекта",
-      "doc": "docs/platform/standards/root-entry-docs.md",
+      "doc": ".harness/docs/root-entry-docs.md",
       "gate": ".harness/scripts/check/check-docs.py"
     },
     {
@@ -119,14 +119,14 @@
       "id": "shell-scripts",
       "enabled": true,
       "title": "Скрипты проходят синтаксис и shellcheck",
-      "doc": "docs/platform/delivery/ci-cd.md",
+      "doc": ".harness/docs/ci-cd.md",
       "gate": ".harness/scripts/check/check-shell.sh"
     },
     {
       "id": "area-profiles",
       "enabled": true,
       "title": "Единые точки входа проверок приложений",
-      "doc": "CONTRIBUTING.md",
+      "doc": ".harness/CONTRIBUTING.md",
       "gate": ".harness/scripts/check/check-area-profiles.py"
     },
     {
@@ -134,7 +134,7 @@
       "module": "sdd/speckit",
       "enabled": true,
       "title": "Конвейер Spec Kit",
-      "doc": "docs/platform/delivery/sdd.md",
+      "doc": ".harness/docs/sdd.md",
       "gate": null
     },
     {
@@ -192,8 +192,12 @@
         "CLAUDE.md",
         "CONTRIBUTING.md",
         "REVIEW.md",
+        ".harness/AGENTS.md",
+        ".harness/CLAUDE.md",
+        ".harness/CONTRIBUTING.md",
+        ".harness/REVIEW.md",
+        ".harness/docs/*.md",
         "docs/platform/delivery/*.md",
-        "docs/platform/agents/*.md",
         "docs/platform/operations/*.md",
         ".harness/README.md",
         ".harness/prompts/*/*.md",
@@ -243,35 +247,35 @@
       "id": "workflow-shell",
       "enabled": true,
       "title": "Поиск без совпадения не роняет шаг конвейера",
-      "doc": "docs/platform/delivery/ci-cd.md",
+      "doc": ".harness/docs/ci-cd.md",
       "gate": ".harness/scripts/check/check-workflow-shell.py"
     },
     {
       "id": "workflow-names",
       "enabled": true,
       "title": "Одно действие конвейера - одно написание имени шага",
-      "doc": "docs/platform/delivery/ci-cd.md",
+      "doc": ".harness/docs/ci-cd.md",
       "gate": ".harness/scripts/check/check-workflow-names.py"
     },
     {
       "id": "review-label",
       "enabled": true,
       "title": "Несостоявшийся круг ревью виден на PR",
-      "doc": "docs/platform/delivery/ci-cd.md",
+      "doc": ".harness/docs/ci-cd.md",
       "gate": ".harness/scripts/check/check-review-label.py"
     },
     {
       "id": "pr-issue-link",
       "enabled": true,
       "title": "Ветка задачи связана с ней в теле PR",
-      "doc": "CONTRIBUTING.md",
+      "doc": ".harness/CONTRIBUTING.md",
       "gate": ".harness/scripts/check/check-pr-issue-link.py"
     },
     {
       "id": "pr-size",
       "enabled": true,
       "title": "Размер PR в пределе policies.size или причина превышения в теле PR",
-      "doc": "CONTRIBUTING.md#3-pull-requests",
+      "doc": ".harness/CONTRIBUTING.md#3-pull-requests",
       "gate": ".harness/scripts/check/check-pr-size.py"
     },
     {
@@ -292,14 +296,14 @@
       "id": "build-diagnostics",
       "enabled": true,
       "title": "Сборка .NET без ошибок, предупреждений и сообщений",
-      "doc": "docs/platform/delivery/ci-cd.md",
+      "doc": ".harness/docs/ci-cd.md",
       "gate": ".harness/scripts/check/check-build-diagnostics.py"
     },
     {
       "id": "dotnet-format",
       "enabled": true,
       "title": "Файлы C# совпадают с выводом CSharpier",
-      "doc": "docs/platform/delivery/ci-cd.md",
+      "doc": ".harness/docs/ci-cd.md",
       "gate": ".harness/scripts/check/check-dotnet-format.py"
     },
     {
@@ -534,7 +538,7 @@
       "auditRunner": "review-requirements"
     },
     "review": {
-      "doc": "docs/platform/delivery/ci-cd.md",
+      "doc": ".harness/docs/ci-cd.md",
       "workflow": "{{#if module:forge/gitlab}}.gitlab/ci/review-round.yml{{else}}.github/workflows/code-review.yml{{/if}}",
       "commonPrompt": ".harness/prompts/review/common.md",
       "allowedTools": "Read,Grep,Glob,TodoWrite,Task",
@@ -583,7 +587,7 @@
         "specs/"
       ],
       "fallback": {
-        "doc": "docs/platform/delivery/ci-cd.md#локальный-круг-ревью",
+        "doc": ".harness/docs/ci-cd.md#локальный-круг-ревью",
         "runner": ".harness/scripts/review/review-local.py",
         "prompt": ".harness/prompts/review/local.md",
         "label": "review-local",
@@ -682,7 +686,7 @@
               "id": "accepted-advice",
               "title": "Принятый совет исправлен этим же PR",
               "check": "pull_request_read:get_review_comments",
-              "doc": "CONTRIBUTING.md#10-находки-по-пути"
+              "doc": ".harness/CONTRIBUTING.md#10-находки-по-пути"
             }
           ]
         },
@@ -738,13 +742,13 @@
     },
     "release-cut": {
       "title": "Ветка release от develop и PR в master",
-      "doc": "CONTRIBUTING.md#11-релиз-и-хотфикс",
+      "doc": ".harness/CONTRIBUTING.md#11-релиз-и-хотфикс",
       "steps": [
         {
           "id": "cut",
           "title": "Ветка release от develop и PR в master",
           "actor": "pipeline",
-          "doc": "docs/platform/delivery/ci-cd.md#релиз",
+          "doc": ".harness/docs/ci-cd.md#релиз",
           "requires": [],
           "produces": [
             "release-branch",
@@ -758,7 +762,7 @@
     },
     "release-merge": {
       "title": "Мерж в master",
-      "doc": "CONTRIBUTING.md#11-релиз-и-хотфикс",
+      "doc": ".harness/CONTRIBUTING.md#11-релиз-и-хотфикс",
       "steps": [
         {
           "id": "ready",
@@ -784,7 +788,7 @@
           "id": "merge",
           "title": "Мерж в master",
           "actor": "human",
-          "doc": "CONTRIBUTING.md#11-релиз-и-хотфикс",
+          "doc": ".harness/CONTRIBUTING.md#11-релиз-и-хотфикс",
           "requires": [
             "ready"
           ],
@@ -800,13 +804,13 @@
     },
     "release-deliver": {
       "title": "Версия, сборка, выкладка, тег и уведомление",
-      "doc": "docs/platform/delivery/ci-cd.md#релиз",
+      "doc": ".harness/docs/ci-cd.md#релиз",
       "steps": [
         {
           "id": "deliver",
           "title": "Версия, сборка, выкладка, тег и уведомление",
           "actor": "pipeline",
-          "doc": "docs/platform/delivery/ci-cd.md#релиз",
+          "doc": ".harness/docs/ci-cd.md#релиз",
           "requires": [],
           "produces": [
             "version-tag",
@@ -822,13 +826,13 @@
     },
     "release-back-merge": {
       "title": "Обратное слияние master в develop",
-      "doc": "CONTRIBUTING.md#11-релиз-и-хотфикс",
+      "doc": ".harness/CONTRIBUTING.md#11-релиз-и-хотфикс",
       "steps": [
         {
           "id": "back-merge",
           "title": "Обратное слияние master в develop",
           "actor": "pipeline",
-          "doc": "docs/platform/delivery/ci-cd.md#релиз",
+          "doc": ".harness/docs/ci-cd.md#релиз",
           "requires": [],
           "produces": [
             "back-merge-pr"
@@ -839,7 +843,7 @@
           "id": "merge",
           "title": "Мерж обратного слияния",
           "actor": "human",
-          "doc": "CONTRIBUTING.md#11-релиз-и-хотфикс",
+          "doc": ".harness/CONTRIBUTING.md#11-релиз-и-хотфикс",
           "requires": [
             "back-merge"
           ],
@@ -921,7 +925,7 @@
   },
   "policies": {
     "issues": {
-      "doc": "CONTRIBUTING.md#12-задачи",
+      "doc": ".harness/CONTRIBUTING.md#12-задачи",
       "types": {
         "bug": {"about": "дефект", "commit": "fix"},
         "enhancement": {"about": "новая возможность или доработка", "commit": "feat"},
@@ -936,7 +940,7 @@
       }
     },
     "findings": {
-      "doc": "CONTRIBUTING.md#10-находки-по-пути",
+      "doc": ".harness/CONTRIBUTING.md#10-находки-по-пути",
       "waiver": "Отложено по просьбе:",
       "defer": [
         "не чинилось",
@@ -968,7 +972,7 @@
       ]
     },
     "size": {
-      "doc": "CONTRIBUTING.md#3-pull-requests",
+      "doc": ".harness/CONTRIBUTING.md#3-pull-requests",
       "files": 50,
       "lines": 1500,
       "reason": "Превышение размера:",
@@ -981,7 +985,7 @@
       ]
     },
     "postApprovalFix": {
-      "doc": "docs/platform/delivery/ci-cd.md#правка-после-апрува",
+      "doc": ".harness/docs/ci-cd.md#правка-после-апрува",
       "lines": 50,
       "build": [
         "*.csproj",
@@ -996,7 +1000,7 @@
       ]
     },
     "authorship": {
-      "doc": "docs/platform/delivery/ci-cd.md#замер-автономии",
+      "doc": ".harness/docs/ci-cd.md#замер-автономии",
       "signatures": [
         "<!-- agent -->",
         "_Generated by [Claude Code](https://claude.ai/code)_"

@@ -6,7 +6,7 @@
     ./.harness/hooks/python.cmd .harness/scripts/check/check-docs.py --anchors
 
 Контракты: docs/platform/architecture/area-map.md и
-docs/platform/standards/root-entry-docs.md.
+.harness/docs/root-entry-docs.md.
 """
 
 from __future__ import annotations
@@ -71,6 +71,7 @@ SECRET_PATTERNS = (
 
 INSTRUCTION_NAMES = ("README.md", "AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "REVIEW.md")
 CENTRAL_INSTRUCTION_NAMES = ("AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "REVIEW.md")
+KIT_INSTRUCTIONS = tuple(".harness/" + name for name in CENTRAL_INSTRUCTION_NAMES)
 INSTRUCTION_ROOTS = tuple(get_list("docs.instructionRoots", ("",)))
 
 LIMITS_ROOT = {
@@ -468,7 +469,7 @@ def check_instruction_limits(files: list[str]) -> list[str]:
 def check_instruction_locations(files: list[str]) -> list[str]:
     return [
         path for path in files
-        if "/" in path and os.path.basename(path) in CENTRAL_INSTRUCTION_NAMES
+        if "/" in path and os.path.basename(path) in CENTRAL_INSTRUCTION_NAMES and path not in KIT_INSTRUCTIONS
     ]
 
 

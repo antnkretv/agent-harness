@@ -31,7 +31,7 @@ description: "Task list template for feature implementation"
 
 ## Path Conventions - свидетельства трека
 
-- Протоколы и итоги приемки: `specs/<трек>/evidence/` по [правилу свидетельств](../../docs/platform/delivery/sdd.md#свидетельства-трека).
+- Протоколы и итоги приемки: `specs/<трек>/evidence/` по [правилу свидетельств](../../.harness/docs/sdd.md#свидетельства-трека).
 
 <!--
   ============================================================================

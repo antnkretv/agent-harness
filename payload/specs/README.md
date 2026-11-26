@@ -1,8 +1,8 @@
 # Реестр спек
 
-Единый указатель на все спеки репозитория. Спека - артефакт трека разработки по Spec Kit: требования EARS с номерами `FR-NNN`, план, задачи. Здесь только реестр и статусы; содержание - в самих спеках. Конвейер - [docs/platform/delivery/sdd.md](../docs/platform/delivery/sdd.md), принципы-гейты - [.specify/memory/constitution.md](../.specify/memory/constitution.md).
+Единый указатель на все спеки репозитория. Спека - артефакт трека разработки по Spec Kit: требования EARS с номерами `FR-NNN`, план, задачи. Здесь только реестр и статусы; содержание - в самих спеках. Конвейер - `.harness/docs/sdd.md`, принципы-гейты - [.specify/memory/constitution.md](../.specify/memory/constitution.md).
 
-Номер трека выдается по [правилу нумерации](../docs/platform/delivery/sdd.md#правило-нумерации).
+Номер трека выдается по правилу нумерации из `.harness/docs/sdd.md`.
 
 ## Активные
 

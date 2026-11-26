@@ -148,7 +148,7 @@
 | `issue/task` | задача, которую заводит агент, по разделам формы задачи | агент: `tracker.py create` или коннектор |
 | `comment/note` | комментарий агента: шапка - тип (`NoteType`), подвал - модель, сессия и SHA коммита, о котором комментарий | `agent-event.py`; агент: `forge.py comment`, `tracker.py comment`, `alert-triage.py analysis` или коннектор |
 | `issue/alert`, `comment/alert-episode`, `comment/alert-note` | issue алерта, срабатывание и запись конвейера разбора | `alert-triage.py` через адаптер трекера, маркеры состояния дописывает скрипт |
-| `commit/message` | сообщение коммита агента и коммита слияния | агент: `git commit -F`; при мерже - по `CONTRIBUTING.md` §3 |
+| `commit/message` | сообщение коммита агента и коммита слияния | агент: `git commit -F`; при мерже - по `.harness/CONTRIBUTING.md` §3 |
 | `change/description` | описание PR: разделы формы, связь с задачей (`--issue`, `--refs`), блок "Статистика сессии" (`--session`), маркер данных | агент: тело PR коннектором, `forge.py open-change` или `forge.py edit-change` |
 | `report/review`, `report/simplify`, `report/pre-draft-audit`, `report/delegated` | итог skill ревью, упрощения, аудита перед PR, ответ исполнителя постановки | агент: последнее сообщение сессии |
 | `report/session` | итоговый отчет сессии конвейера | агент: последнее сообщение сессии, вывод `pipeline-run.py next change --session <id> --report -` с итогом на входе |
@@ -166,7 +166,7 @@
 3. Вызов `text_templates.render` в публикаторе или команда `text_templates.py render <шаблон>` в
    skill или промпте агента. Ключи `messages.env`, которые заменил шаблон, удаляются тем же изменением.
 
-Гейт `text-registry` ([`check-text-registry.py`](../../../.harness/scripts/check/check-text-registry.py))
+Гейт `text-registry` ([`check-text-registry.py`](../scripts/check/check-text-registry.py))
 отклоняет вызов несуществующего шаблона, шаблон без вызова кодом или командой `render`, часть без
 составной переменной, форму комплекта без переменной, переменную без записи, запись без использования или без `about`, `values` не непустым словарем ключ - текст, `part` на
 несуществующую часть, `form` на несуществующую или неразмеченную форму комплекта, `prompt` и `style` на несуществующий файл или раздел и служебную разметку в шаблоне: `%s`,

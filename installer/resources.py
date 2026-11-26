@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -154,6 +155,22 @@ def kit_root() -> Path:
     raise Refusal(msg("no_kit", HERE))
 
 
+def kit_tree(root: Path | None = None) -> str:
+    root = root or kit_root()
+    if (root / "tools").is_dir() or (root / ".git").exists():
+        return ""
+    return loader().tree_digest((path.relative_to(root).as_posix(), path.read_bytes()) for path in root.rglob("*")
+                                if path.is_file() and "__pycache__" not in path.parts)
+
+
+@functools.cache
+def loader():
+    spec = importlib.util.spec_from_file_location("ah_loader", kit_root() / "payload" / LOADER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_json(path: Path, missing: str) -> dict:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -169,10 +186,6 @@ def load_json(path: Path, missing: str) -> dict:
 def unpack(archive: Path, into: Path) -> None:
     with tarfile.open(archive) as tar:
         tar.extractall(into, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
-
-
-def build_of(kit: dict) -> tuple:
-    return kit.get("version"), kit.get("digest"), kit.get("config") or kit.get("packed", {}).get("config")
 
 
 def manifest_moved(root: Path, lock: dict) -> bool:

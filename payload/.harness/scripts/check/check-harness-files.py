@@ -36,7 +36,7 @@ def main() -> int:
         print(msg("harness_files_no_lock", LOCK))
         return 1
     checked = failed = 0
-    pinned = lock_kit().get("sha256", "")
+    pinned = lock_kit().get("tree", "")
     record = installed_record()
     if record and pinned and record.get("kit") != pinned:
         failed += 1

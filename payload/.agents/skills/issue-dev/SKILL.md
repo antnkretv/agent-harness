@@ -7,9 +7,9 @@ description: Разработка задачи до чернового PR, ре�
 # Конвейер разработки через issue
 
 Issue skill заводит только по просьбе человека. С попутной находкой поступай по политике
-`agents.findings` ([`CONTRIBUTING.md` §10](../../../CONTRIBUTING.md#10-находки-по-пути)){{#if setting:agents.findings=same-pr}}: она чинится
+`agents.findings` ([`.harness/CONTRIBUTING.md` §10](../../../.harness/CONTRIBUTING.md#10-находки-по-пути)){{#if setting:agents.findings=same-pr}}: она чинится
 в текущем PR, каким бы ни был ее объем{{/if}}.
-Git-стандарт и имена веток: [`CONTRIBUTING.md`](../../../CONTRIBUTING.md).
+Git-стандарт и имена веток: [`.harness/CONTRIBUTING.md`](../../../.harness/CONTRIBUTING.md).
 Композиции: [`.harness/pipelines.json`](../../../.harness/pipelines.json); определения процессов и
 параметры review: [`.harness/methodology.json`](../../../.harness/methodology.json).
 Исполнение и проверку стадий ведет
@@ -24,7 +24,7 @@ Git-стандарт и имена веток: [`CONTRIBUTING.md`](../../../CONT
 Человек задает условия задачи флагами вызова перед постановкой: `--base <ветка>` - база ветки задачи и
 PR вместо базовой ветки проекта, `--review local` - только локальные круги ревью вместо кругов в CI,
 `--rounds <N>|max` - предел кругов ревью: после N-го круга с правками управление у человека, `max` -
-без предела, `0` - без ревью ([условия Ready и защита базы](../../../docs/platform/delivery/ci-cd.md#локальный-круг-ревью)); `--merge agent` - PR после Ready вливает
+без предела, `0` - без ревью ([условия Ready и защита базы](../../../.harness/docs/ci-cd.md#локальный-круг-ревью)); `--merge agent` - PR после Ready вливает
 агент. Без флага действует значение по умолчанию: базовая ветка проекта, мерж за человеком, предел
 кругов - `maxVisits` шага ревью композиции, круги - по настройке `agents.review`; `--review ci`
 перекрывает и ее. Действующие условия команда печатает строкой
@@ -50,14 +50,14 @@ Issue, PR, коммит, комментарий и ответ пиши по ра
 `./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py form IssueText --out <файл>`, заполни ее слоты и собери
 `./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py render issue/task --set-file IssueText=<файл> --out <файл>`
 и заведи коннектором или `tracker.py create --title <заголовок> --body-file <файл> --label <тип>`:
-заголовок и метки - по [`CONTRIBUTING.md` §12](../../../CONTRIBUTING.md#12-задачи).
+заголовок и метки - по [`.harness/CONTRIBUTING.md` §12](../../../.harness/CONTRIBUTING.md#12-задачи).
 
 {{#if module:forge/github}}Предпочитай GitHub connector; `gh` допустим как fallback.{{else}}Предпочитай
 коннектор поставщика кода; запасной путь - `./.harness/hooks/python.cmd .harness/lib/forge.py` и
 `./.harness/hooks/python.cmd .harness/lib/tracker.py`.{{/if}} Перед записью проверь repository, issue/PR, base и head.
 Не публикуй секреты и вывод credential commands.
 PR без мержа закрывай только командой `./.harness/hooks/python.cmd .harness/lib/forge.py close-change <PR> --body-file <файл>`
-с комментарием `text_templates.py render comment/close-note` ([`CONTRIBUTING.md` §3](../../../CONTRIBUTING.md#3-pull-requests)).
+с комментарием `text_templates.py render comment/close-note` ([`.harness/CONTRIBUTING.md` §3](../../../.harness/CONTRIBUTING.md#3-pull-requests)).
 
 ## План процесса
 
@@ -77,12 +77,12 @@ PR без мержа закрывай только командой `./.harness/
    `task-worktree.py start --type <тип> --key <слаг>`: тип - тип Conventional Commits будущего
    заголовка PR, слаг - кебаб-кейс по смыслу задачи. Задача трекера, в том числе названная ссылкой на
    ее карточку, добавляет `--issue <ключ задачи>`; продолжение PR - `--change <номер>` без `--type` и `--key`. Имя ветки
-   строит конвенция проекта ([`CONTRIBUTING.md` §2](../../../CONTRIBUTING.md#2-ветки)). Дальше работай в
+   строит конвенция проекта ([`.harness/CONTRIBUTING.md` §2](../../../.harness/CONTRIBUTING.md#2-ветки)). Дальше работай в
    копии из результата команды; ветку, которую назвала платформа агента, не публикуй.
 
 Без issue пункты 1-3 отпадают: постановку несет само поручение, пункты 4 и 5 остаются.
 
-Постановка координатора следует [шаблону](../../../docs/platform/agents/delegated-task.md). Первым
+Постановка координатора следует [шаблону](../../../.harness/docs/delegated-task.md). Первым
 действием сверь ее базу с текущей и до начала работы назови пункты, которые сдвиг сделал устаревшими.
 
 ### clarify
@@ -90,7 +90,7 @@ PR без мержа закрывай только командой `./.harness/
 До правок сверь постановку с кодом, документами, задачей и связанными PR. Вопрос человеку задается,
 только когда пункт допускает несколько толкований, выбор меняет результат или объем работы и ответа
 нет в коде, документах и задаче; а также когда нужны продуктовое решение или разрешение, которых нет.
-Необратимый выбор - по [`CONTRIBUTING.md` §10](../../../CONTRIBUTING.md#10-находки-по-пути). Остальное
+Необратимый выбор - по [`.harness/CONTRIBUTING.md` §10](../../../.harness/CONTRIBUTING.md#10-находки-по-пути). Остальное
 реши сам и запиши допущением. Вопросы - одним сообщением, после него ход заканчивается. Трек SDD
 уточняет сам трек; в сессии без человека вопросов нет. Команды шага -
 [сессия конвейера](../../../.harness/README.md#сессия-конвейера).
@@ -103,7 +103,7 @@ PR. Находка по ходу работы идет по `CONTRIBUTING` §10{
 Ветку и worktree выделяет `task-worktree.py` ([авторская рабочая копия](../../../.harness/README.md#авторская-рабочая-копия));
 вторую ветку вручную не создавай.
 Обнови сведения о базе и проверь рабочее дерево по
-[`CONTRIBUTING.md` §2](../../../CONTRIBUTING.md#2-ветки). Хотфикс идет от `{{git.releaseBranch}}` и в `{{git.releaseBranch}}`
+[`.harness/CONTRIBUTING.md` §2](../../../.harness/CONTRIBUTING.md#2-ветки). Хотфикс идет от `{{git.releaseBranch}}` и в `{{git.releaseBranch}}`
 (раздел `release`). Не включай чужие изменения. При грязном
 дереве используй отдельный worktree или самостоятельный clone. Пока у открытого PR не все проходы
 ревью одобрены, базу не подливай: шаг вернется после апрува, подлив вердикты не сбрасывает.
@@ -111,14 +111,14 @@ PR. Находка по ходу работы идет по `CONTRIBUTING` §10{
 ### implement
 
 - {{#if setting:agents.findings=same-pr}}Реализуй scope issue, согласованные уточнения и находки по пути (§10).{{else}}Реализуй scope issue и согласованные уточнения; с находками по пути поступай по §10.{{/if}}
-- Следуй корневому [`AGENTS.md`](../../../AGENTS.md) и применимым skills.
-- Источник истины и готовое решение для [SoT, DRY и KISS](../../../CONTRIBUTING.md#13-принципы-кода)
+- Следуй корневому [`.harness/AGENTS.md`](../../../.harness/AGENTS.md) и применимым skills.
+- Источник истины и готовое решение для [SoT, DRY и KISS](../../../.harness/CONTRIBUTING.md#13-принципы-кода)
   ищи так: символы и ссылки - через LSP, остальное - поиском по дереву, владельца документа - по
   [карте ролей](../../../docs/platform/standards/documentation.md#карта-ролей).
 - Новые тесты - по [критерию полезности теста](../../../docs/platform/standards/test-usefulness.md);
   ноль новых тестов - нормальный результат задачи.
 - Команды проверок затронутых областей находятся в профилях `CONTRIBUTING.md`.
-- Тема PR и предел размера - по [`CONTRIBUTING.md` §3](../../../CONTRIBUTING.md#3-pull-requests).
+- Тема PR и предел размера - по [`.harness/CONTRIBUTING.md` §3](../../../.harness/CONTRIBUTING.md#3-pull-requests).
 
 Стейджи только явные пути: `git add -- <files>`. Не используй `git add -A` и `git add .`.
 
@@ -149,7 +149,7 @@ PR. Находка по ходу работы идет по `CONTRIBUTING` §10{
 
 Голова, база и правила аудита не изменились - используй подтверждение прошлого прогона.
 
-Пройди по собственному дифу теми же планками, какими пойдет круг: [`REVIEW.md`](../../../REVIEW.md),
+Пройди по собственному дифу теми же планками, какими пойдет круг: [`.harness/REVIEW.md`](../../../.harness/REVIEW.md),
 [`.harness/review/requirements.md`](../../../.harness/review/requirements.md) и
 [`.harness/review/architecture.md`](../../../.harness/review/architecture.md). Планки берутся с
 базовой ветки - там же, откуда их берет круг.
@@ -231,19 +231,19 @@ PR. Находка по ходу работы идет по `CONTRIBUTING` §10{
    `task-worktree.py start`, без флага входа `--base` это `{{git.baseBranch}}` (хотфикс - в `{{git.releaseBranch}}`). Описание начни с заготовки формы
    `./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py form ChangeBody --out <файл>` и собери командой
    `./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py render change/description --set-file ChangeBody=<файл> --session <id> --out <файл>`:
-   разделы заполняешь по [`CONTRIBUTING.md` §3](../../../CONTRIBUTING.md#3-pull-requests), разметку формы
-   соблюдаешь по [`templates.md`](../../../docs/platform/agents/templates.md#где-лежат), а затраты разработки команда подставит сама. Без `--session` блока "Статистика сессии" нет,
+   разделы заполняешь по [`.harness/CONTRIBUTING.md` §3](../../../.harness/CONTRIBUTING.md#3-pull-requests), разметку формы
+   соблюдаешь по [`templates.md`](../../../.harness/docs/templates.md#где-лежат), а затраты разработки команда подставит сама. Без `--session` блока "Статистика сессии" нет,
    и шаг `draft-pr` не засчитывается, пока описание PR не несет запись затрат. С issue добавь
    {{#if module:tracker/jira}}`--issue PROJ-123` (строка `Closes PROJ-123`), а если приемка задачи продолжается после этого PR - `--refs PROJ-123`.
-   Задачу закрывает [задание закрытия](../../../docs/platform/delivery/ci-cd.md#закрытие-задач) после мержа в базовую ветку.{{else}}`--issue N` (строка `Closes #N`), а если приемка задачи продолжается после этого PR - `--refs N`.{{/if}}
+   Задачу закрывает [задание закрытия](../../../.harness/docs/ci-cd.md#закрытие-задач) после мержа в базовую ветку.{{else}}`--issue N` (строка `Closes #N`), а если приемка задачи продолжается после этого PR - `--refs N`.{{/if}}
    Правленое описание собери той же командой с `--change <PR>` из заполненной заготовки: сохрани файл
    заготовки или возьми новую и перенеси в слоты разделы опубликованного описания, а `--issue` и `--refs` оставь, только
    если меняешь связи с задачей: что команда переносит из опубликованного описания, называет
-   [`templates.md`](../../../docs/platform/agents/templates.md#тексты-агента).
+   [`templates.md`](../../../.harness/docs/templates.md#тексты-агента).
    Описание публикуй без правок: новое - при открытии PR, правленое - коннектором поставщика кода или
    командой `./.harness/hooks/python.cmd .harness/lib/forge.py edit-change <PR> --body-file <файл>`.
    Без коннектора PR открывает команда `./.harness/hooks/python.cmd .harness/lib/forge.py open-change --head <ветка> --base <база> --title "<заголовок>" --body-file <файл> --draft`.
-   Заголовок - по [`CONTRIBUTING.md` §3](../../../CONTRIBUTING.md#3-pull-requests).
+   Заголовок - по [`.harness/CONTRIBUTING.md` §3](../../../.harness/CONTRIBUTING.md#3-pull-requests).
 2. Номер PR за веткой записывает конвейер: следующий `next change` находит PR ветки, привязывает его к
    рабочей копии и пишет номер в git config ветки, а следующие commits получают PR trailer через
    `commit-msg`. Отдельного шага регистрации нет.
@@ -268,7 +268,7 @@ trailer. Заголовок и commits используют Conventional Commits
 от одобренной головы меньше `policies.postApprovalFix` строк и трогает только файлы, которые назвали
 упавшие гейты в журнале Check этой головы, или файлы сборки и тестов; слияние базы без ручного
 разрешения в дифф не входит, а слияние ветки не из базы требует нового круга. Иначе проход идет в новый круг
-([правка после апрува](../../../docs/platform/delivery/ci-cd.md#правка-после-апрува)). Принятые правки
+([правка после апрува](../../../.harness/docs/ci-cd.md#правка-после-апрува)). Принятые правки
 конвейер называет в описании PR (пересобери его с `--change`) и в теле коммита слияния. Зеленый Check -
 шаг называет `--run gates`: локально идут только гейты данных PR (`check-all.py --change`): связь с
 задачей, размер и сверка коммитов с веткой. Агент в CI до `final-gates` не доходит: у него полный прогон с
@@ -285,7 +285,7 @@ trailer. Заголовок и commits используют Conventional Commits
 результатов проверок. Локальный журнал автора не заменяет доверенные результаты конвейера.
 Если обязательное подтверждение недоступно, оставь PR в Draft и назови препятствие. При ревью `local` шаг называет команду `--run ready`, когда локальные круги по
 поручению человека одобрили все проходы; при `--rounds 0` - в любом режиме ревью, без кругов. Условия команды -
-[локальный круг ревью](../../../docs/platform/delivery/ci-cd.md#локальный-круг-ревью). Локальный круг,
+[локальный круг ревью](../../../.harness/docs/ci-cd.md#локальный-круг-ревью). Локальный круг,
 которым заменен недоступный круг в CI, оставляет PR в Draft.
 
 ### before-merge
@@ -296,7 +296,7 @@ trailer. Заголовок и commits используют Conventional Commits
 
 Используй объявленную запись `processes.merge.steps` и её `handoff`. Auto-merge без прямой
 просьбы не включай. Сообщение коммита, которым вливается PR, собери командой `render commit/message --change <PR>`
-([тексты агента](../../../docs/platform/agents/templates.md#тексты-агента)) и передай при мерже так, как требует [`CONTRIBUTING.md` §3](../../../CONTRIBUTING.md#3-pull-requests): номер
+([тексты агента](../../../.harness/docs/templates.md#тексты-агента)) и передай при мерже так, как требует [`.harness/CONTRIBUTING.md` §3](../../../.harness/CONTRIBUTING.md#3-pull-requests): номер
 запроса в коммите слияния нужен релизу. Принятые правки после апрува команда перечислит в теле сама.
 
 ### pr-event
@@ -322,11 +322,11 @@ head и открытым PR; не начинай параллельную реа
 ### after-merge
 
 Проверь, что PR действительно merged. Для завершающего PR проверь закрытие issue через `Closes`
-([кто закрывает](../../../docs/platform/delivery/ci-cd.md#закрытие-задач)); PR в базу входа `--base`
+([кто закрывает](../../../.harness/docs/ci-cd.md#закрытие-задач)); PR в базу входа `--base`
 задачу не закрывает: она остается открытой до слияния интеграционной ветки, и ее не закрывай вручную;
 для промежуточного PR с `Refs` issue остается открытой: оставь в ней комментарий со ссылкой на PR,
 коммитом слияния и пунктами приемки, которые PR оставил незакрытыми; после выката их находят по
-[отчету релиза](../../../docs/platform/delivery/ci-cd.md#релиз). Комментарий собери командой
+[отчету релиза](../../../.harness/docs/ci-cd.md#релиз). Комментарий собери командой
 `./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py render comment/merge-note --set-file MergeNote=<файл> --change <PR> --commit <SHA слияния> --out <файл>`:
 ссылку на PR и коммит подставит она. Удали remote branch только если это принято
 repository и ветка больше не нужна: удаление основной remote-ветки остается политикой поставщика
@@ -337,13 +337,13 @@ repository и ветка больше не нужна: удаление осно
 
 ### release
 
-Шаги релиза, хотфикса и обратного слияния - [`CONTRIBUTING.md` §11](../../../CONTRIBUTING.md#11-релиз-и-хотфикс),
+Шаги релиза, хотфикса и обратного слияния - [`.harness/CONTRIBUTING.md` §11](../../../.harness/CONTRIBUTING.md#11-релиз-и-хотфикс),
 состав - композиция `release` в [`.harness/pipelines.json`](../../../.harness/pipelines.json), исполнители -
 ее процессы в [`.harness/methodology.json`](../../../.harness/methodology.json),
-устройство - [`ci-cd.md`](../../../docs/platform/delivery/ci-cd.md#релиз). Здесь только то, что касается агента.
+устройство - [`ci-cd.md`](../../../.harness/docs/ci-cd.md#релиз). Здесь только то, что касается агента.
 
 {{#if module:release/tag-flow}}Релиз по просьбе человека ведет skill [`release`](../release/SKILL.md). {{/if}}Для задачи на релиз внутри
-конвейера выбери план `release`; для хотфикса используй правила ветки и целевого PR из `CONTRIBUTING.md` §11. Release PR и PR обратного слияния открывает конвейер. Без доступа к его
+конвейера выбери план `release`; для хотфикса используй правила ветки и целевого PR из `.harness/CONTRIBUTING.md` §11. Release PR и PR обратного слияния открывает конвейер. Без доступа к его
 запуску срежь релиз командой `release.py cut --push`: она создает ту же ветку и черновой PR твоими
 учетными данными поставщика кода.
 Release PR в Ready переводит `pipeline-run.py run release` с `--task`, `--change`, `--until ready`

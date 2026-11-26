@@ -21,11 +21,11 @@ description: Независимое архитектурное ревью PR, AD
 
 ## Источники
 
-Всегда прочитай [`REVIEW.md`](../../../REVIEW.md) и специализированную планку
+Всегда прочитай [`.harness/REVIEW.md`](../../../.harness/REVIEW.md) и специализированную планку
 [`.harness/review/architecture.md`](../../../.harness/review/architecture.md). Затем используй:
 
-- корневой [`AGENTS.md`](../../../AGENTS.md) и применимый skill области;
-- карту системы из индекса [`docs/README.md`](../../../docs/README.md) и релевантные Accepted ADR;
+- корневой [`.harness/AGENTS.md`](../../../.harness/AGENTS.md) и применимый skill области;
+- карту системы из индекса [`docs/README.md`](../../../.harness/docs/README.md) и релевантные Accepted ADR;
 - рассматриваемый артефакт, затронутых потребителей и исполняемую конфигурацию.
 
 Гарантию платформы или библиотеки проверяй по первичному источнику через профильный vendor skill,

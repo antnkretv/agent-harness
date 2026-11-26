@@ -1,12 +1,12 @@
 # Параметры, модули и зависимости
 
 Справочник параметров проекта ставится вместе со слоем:
-[`payload/docs/platform/agents/harness-parameters.md`](payload/docs/platform/agents/harness-parameters.md) - в
-проекте это `docs/platform/agents/harness-parameters.md`. Там манифест `.harness/project/manifest.json`, модули
+[`payload/.harness/docs/harness-parameters.md`](payload/.harness/docs/harness-parameters.md) - в
+проекте это `.harness/docs/harness-parameters.md`. Там манифест `.harness/project/manifest.json`, модули
 каталога с расширениями и настройками, стеки приложений, внешние зависимости и настройки GitHub для
 конвейера issue-dev. Архитектурные гейты по стекам и модулям -
 [`gates.md`](payload/docs/platform/architecture/gates.md), устройство слоя и
-обновление - [`harness.md`](payload/docs/platform/agents/harness.md), формат каталога `modules.json` -
+обновление - [`harness.md`](payload/.harness/docs/harness.md), формат каталога `modules.json` -
 [ниже](#каталог-modulesjson).
 
 Здесь - только то, что принадлежит самому комплекту: границы внедрения, архив, каталог модулей, манифест
@@ -15,8 +15,8 @@
 Места расширений проекта, которые `apply` после создания не пишет, - `.harness/project/` (манифест,
 ответы, карта областей, сообщения, гейты `rules.own`, шаги подготовки окружения `setup` манифеста), заготовки `project-check.yml` и
 `project-deploy.yml` и настройки машины `.harness/settings.env`: перечень и порядок чтения -
-[расширения проекта](payload/docs/platform/agents/harness.md#расширения-проекта) и
-[настройки окружения](payload/docs/platform/agents/harness-parameters.md#настройки-окружения). Перечень
+[расширения проекта](payload/.harness/docs/harness.md#расширения-проекта) и
+[настройки окружения](payload/.harness/docs/harness-parameters.md#настройки-окружения). Перечень
 настроек с значениями по умолчанию комплект держит файлом
 [`payload/.harness/settings.defaults.env`](payload/.harness/settings.defaults.env).
 
@@ -39,7 +39,7 @@
 | Node | Корневой npm workspace, один lock-файл, flat ESLint и исходники TypeScript. Чистый JavaScript, pnpm, yarn и Bun требуют отдельного адаптера или миграции; замены имени команды недостаточно. |
 | .NET | Импортируется журнал диагностик SARIF: гейт `build-diagnostics` требует ноль диагностик сборки, `dotnet-format` - раскладку CSharpier. Анализаторы, арх-тесты и политику сборки проект подключает сам точками входа `analyze` и `architecture`. |
 | Код, задачи и CI | Адаптеры GitHub/GitLab и GitHub Issues/Jira, либо работа без forge. Другой поставщик требует реализации адаптера и CI. |
-| Агент | Claude Code, Codex и Cursor CLI; установщик Cursor CLI поддерживает Linux/macOS, на native Windows Cursor CLI ставит его собственный установщик ([окружение агентов](payload/docs/platform/agents/environment.md)). Версии, модели и effort настраиваются. Произвольный CLI или OpenAI-compatible endpoint требует новой интеграции запуска, учетных данных и разбора результата. |
+| Агент | Claude Code, Codex и Cursor CLI; установщик Cursor CLI поддерживает Linux/macOS, на native Windows Cursor CLI ставит его собственный установщик ([окружение агентов](payload/.harness/docs/environment.md)). Версии, модели и effort настраиваются. Произвольный CLI или OpenAI-compatible endpoint требует новой интеграции запуска, учетных данных и разбора результата. |
 | Машина | Linux/macOS и native Windows x64. На Windows нужны Git for Windows с Bash, Python 3.11+ (Python Launcher или `python` в PATH), Docker Desktop и PowerShell; harness сам выбирает Git Bash и интерпретатор Python. |
 
 `doctor` проверяет зависимости машины в пределах выбранных модулей; до `configure` выбор еще
@@ -93,7 +93,7 @@ sha256 config.json>.tar.gz` несет файлы только включенн�
 
 Что хранят `pipelines.json`, `methodology.json` и `project/manifest.json` - [что объявляет
 конвейер](payload/.harness/README.md#что-объявляет-конвейер). Корневые объекты `agents.cli` и
-`agents.tools` - [модуль `agents`](payload/docs/platform/agents/harness-parameters.md#agents).
+`agents.tools` - [модуль `agents`](payload/.harness/docs/harness-parameters.md#agents).
 
 ## Каталог `modules.json`
 
@@ -203,10 +203,10 @@ prose
 | Ключ | Что задает |
 | --- | --- |
 | `name`, `version` | имя и версия комплекта; обе пишутся в `lock.json` проекта |
-| `repository` | адрес репозитория комплекта: рендер ведет ссылки на справочники места `reference` в `<repository>/blob/<commit или v<version>>/payload/<путь>`; пишется в `lock.json` проекта: по нему загрузчик и `ah upgrade` получают коммит `commit` или скачивают архив выпуска `<repository>/releases/download/v<version>/<name>-<version>.tar.gz` |
+| `repository` | адрес репозитория комплекта: пишется в `lock.json` проекта: по нему загрузчик и `ah upgrade` получают коммит `commit` или скачивают архив выпуска `<repository>/releases/download/v<version>/<name>-<version>.tar.gz` |
 | `commit` | коммит репозитория комплекта, из которого собран архив; его пишет только `kit.py build --commit` из checkout без правок, выпуск его не несет. Пишется в `lock.json` проекта: без версии в кеше загрузчик собирает комплект из этого коммита |
 | `released` | пути, которые комплект перестал ставить и передал проекту: `apply` снимает их с учета `lock.json`, а файл оставляет на месте |
-| `digest` | дайджест сборки: все файлы архива, кроме `kit.json`, и поля манифеста; архив под решения наследует его у полной сборки. Пишется в `lock.json` проекта и отличает сборки одной версии: `verify` и `status` принимают только сборку из `lock.json`, `apply` другой сборки той же версии предупреждает |
+| `digest` | дайджест сборки: все файлы архива, кроме `kit.json`, и поля манифеста; архив под решения наследует его у полной сборки. В `lock.json` проекта не пишется: сборку там закрепляет `tree` - отпечаток ее файлов, по нему `verify` и `status` принимают только сборку из `lock.json`, `apply` другой сборки той же версии предупреждает |
 | `dependencies` | внешние зависимости: `need` (`required`, `ci`, `optional`), `module` - путь, которому зависимость нужна, минимум, закрепленная или проверенная версия; `pinFile` и `pinPattern` - закрепление в файле, `pinSetting` - ключ проекта, например `agents.cli.codexVersion`; проверка - `probe` (команда версии, `{platform}/` - путь в `.harness` комплекта), `status` (команда, чей код 0 - готовность) или `env` (переменные среды, хватит одной); `local` - только на машине разработчика: `verify` и `doctor --ci` запись пропускают |
 | `files` | файл payload: `module` - путь модуля или список путей, из которых хватит одного, `also` - пути, нужные все сразу, `at` - атрибут расширения модуля в каталоге, который задает путь установки файла, роль (`managed`, `json`, `block`, `seed`), `render` для шаблона, `executable` для исполняемого, `extend` - место проекта, куда переносится правка файла: `apply` пишет его в запись файла `lock.json`, а гейт `harness-files` и `ah.py verify` называют его в отказе, `place` - место файла роли `managed` после установки по lock: без поля - `lock`, файл ставит `ah install` из кеша версий; `shell` - файл оболочки в git проекта, его читает инструмент до установки: площадка CI, агент на старте, сборка; `reference` - справочник для людей без подстановок проекта: в проект не ставится, ссылки на него ведут в репозиторий комплекта |
 
@@ -225,7 +225,6 @@ prose
 | --- | --- |
 | `{{project.name}}`, `{{git.baseBranch}}` и любой ключ манифеста с точкой | значение ключа; отсутствующий ключ - отказ установки с именем файла |
 | `{{harness.kitVersion}}`, `{{harness.installDate}}` | версия комплекта, дата установки |
-| `{{harness.placed}}` | строки `.gitignore` для файлов места `lock` и каталога модулей `.harness/state/modules.json`, по одной на файл; свертки в каталоги нет, чтобы блок не зависел от индекса проекта |
 | `{{harness.extension.<модуль>}}` | выбранное расширение модуля, у которого выбрано одно расширение |
 | `{{harness.runner.<вид>}}` | пул раннеров вида задания `check`, `review`, `agent`, `triage` (только GitHub) или `release` списком JSON: метки `runs-on` модуля `runners/github-actions`, с переменной вида в `runners/github-actions.variables` - выражение `fromJSON` переменной репозитория с метками запасным значением, теги `runners/gitlab-runner`; без модуля - `["ubuntu-latest"]` у GitHub и `[]` у GitLab |
 | `{{harness.areasTable}}`, `{{harness.profileRows}}`, `{{harness.entryRows}}`, `{{harness.appRows}}` | строки таблиц областей, профилей, профилей с точками входа ролей `apps[].entries` и приложений из `apps[]` |

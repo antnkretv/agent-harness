@@ -3,7 +3,7 @@
 
 Шаблон - файл templates/<класс>/<имя>.md, его идентификатор - путь без расширения.
 Переменная - ${Name} с записью в templates/variables.json. Устройство и порядок
-добавления шаблона - docs/platform/agents/templates.md.
+добавления шаблона - .harness/docs/templates.md.
 
     ./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py list
     ./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py show <шаблон>

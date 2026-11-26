@@ -61,7 +61,7 @@
     "ChangeBody": {
       "about": "описание PR по разделам формы площадки",
       "form": "forge.changeTemplate",
-      "prompt": "CONTRIBUTING.md#3-pull-requests"
+      "prompt": ".harness/CONTRIBUTING.md#3-pull-requests"
     },
     "ChangeCount": {
       "about": "число PR в релизе"
@@ -113,7 +113,7 @@
     },
     "CommitSubject": {
       "about": "заголовок коммита",
-      "prompt": "CONTRIBUTING.md#1-сообщения-коммитов"
+      "prompt": ".harness/CONTRIBUTING.md#1-сообщения-коммитов"
     },
     "CompareLink": {
       "about": "ссылка Markdown на сравнение прошлого и нового тега"
@@ -121,7 +121,7 @@
     "DelegatedReport": {
       "about": "ответ исполнителя постановки",
       "form": "forms/delegated",
-      "prompt": "docs/platform/agents/delegated-task.md#ответ"
+      "prompt": ".harness/docs/delegated-task.md#ответ"
     },
     "ChangeStats": {
       "about": "раскрываемый блок статистики сессии в описании PR: ссылка на сессию и затраты разработки; без записи затрат блока нет",
@@ -180,7 +180,7 @@
     "IssueText": {
       "about": "тело задачи, которую заводит агент, по разделам формы задачи",
       "form": "tracker.issueTemplate",
-      "prompt": "CONTRIBUTING.md#12-задачи"
+      "prompt": ".harness/CONTRIBUTING.md#12-задачи"
     },
     "Issues": {
       "about": "задачи, которые закрыли PR релиза, через запятую"

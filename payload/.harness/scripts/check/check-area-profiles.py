@@ -11,7 +11,7 @@ import script_paths  # noqa: E402,F401
 from ci_common import ROOT, app_prefix, get_records, msg, payload  # noqa: E402
 
 MANIFEST = ".harness/project/manifest.json"
-PROFILE_TABLE = "CONTRIBUTING.md"
+PROFILE_TABLE = ".harness/CONTRIBUTING.md"
 PROFILE_COLUMN = r"Локальный verify-гейт"
 SKIP_DIRS = {"node_modules", "dist", "bin", "obj", ".design-sync", ".vale-work"}
 

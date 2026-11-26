@@ -11,7 +11,7 @@
 Требования к коду и документам живут у своих владельцев:
 
 - архитектурный контроль и гейт у конвенции - [gates.md](../../docs/platform/architecture/gates.md);
-- SoT, DRY, KISS, безопасность и приватность - [CONTRIBUTING §13](../../CONTRIBUTING.md#13-принципы-кода);
+- SoT, DRY, KISS, безопасность и приватность - `.harness/CONTRIBUTING.md` §13;
 - полезность теста - [standards/test-usefulness](../../docs/platform/standards/test-usefulness.md);
 - комментарии и запрет пометок `FR-NNN` в них - [standards/code-comments](../../docs/platform/standards/code-comments.md);
 - документ фичи и роли документов - [standards/documentation](../../docs/platform/standards/documentation.md).
@@ -28,15 +28,15 @@
 после. Пробел, который не вошел в трек, но мешает пользователю работать, оформляется задачей,
 а не дописывается втихую сверх объема.
 **Гейт:** проход требований ревью - сделано не шире и не уже постановки
-([`.harness/review/requirements.md`](../../.harness/review/requirements.md)).
+(`.harness/review/requirements.md`).
 
 ## Дельта проекта
 
 Проект - **{{project.name}}**. Идентичность (репозиторий, ветки, состав приложений, пути
 инструментария) объявлена в [`.harness/project/manifest.json`](../../.harness/project/manifest.json), реестр
 правил разработки и их гейтов - в
-[`.harness/methodology.json`](../../.harness/methodology.json) комплекта и в разделе `rules` манифеста
-([как снять правило](../../.harness/README.md#как-снять-правило)). Перенос конституции в другой
+`.harness/methodology.json` комплекта и в разделе `rules` манифеста
+(как снять правило: `.harness/README.md`). Перенос конституции в другой
 проект - это переписывание дельты, а не принципов.
 
 ### Язык, источники истины, базовая ветка
@@ -44,13 +44,13 @@
 Язык спек и docs - **русский**. Источник архитектурных решений -
 [`docs/platform/adr/`](../../docs/platform/adr/README.md) (решение описывает действующее правило),
 разложенный по областям; ADR цитируется с областью.
-Карта SDD-артефактов - [`sdd.md`](../../docs/platform/delivery/sdd.md). Базовая ветка -
+Карта SDD-артефактов - `.harness/docs/sdd.md`. Базовая ветка -
 `{{git.baseBranch}}` (ключ `git.baseBranch` манифеста).
 
 ### Раскладка дерева
 
 Приложения и их каталоги перечислены в `apps[]` манифеста и в
-[AGENTS.md](../../AGENTS.md#области); общий слой (документация, спеки, агент-активы, конвейер) -
+`.harness/AGENTS.md`; общий слой (документация, спеки, агент-активы, конвейер) -
 в корне.
 
 ### Ограничения стека
@@ -78,11 +78,11 @@ ADR. Конституция держит одно правило: расшире
 ### Runtime-guidance для агентов
 
 [`AGENTS.md`](../../AGENTS.md), [`CLAUDE.md`](../../CLAUDE.md), [`CONTRIBUTING.md`](../../CONTRIBUTING.md)
-(git-стандарт), [`sdd.md`](../../docs/platform/delivery/sdd.md).
+(git-стандарт), `.harness/docs/sdd.md`.
 
 ## Development Workflow & Quality Gates
 
-Порядок конвейера, артефакты трека, рыночная сверка и трассировка - [`sdd.md`](../../docs/platform/delivery/sdd.md);
+Порядок конвейера, артефакты трека, рыночная сверка и трассировка - `.harness/docs/sdd.md`;
 git - [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
 - **Constitution Check** в `plan.md` - обязательный гейт перед дизайном и после него.

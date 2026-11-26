@@ -9,8 +9,8 @@ description: Выпуск релиза от среза release PR до итог�
 Релиз выпускает сессия релиза по просьбе человека: вызов `/release` или просьба словами. Начни с
 `./.harness/hooks/python.cmd .harness/scripts/pipeline/pipeline-run.py next release` и выполняй шаги, которые
 он называет: срез, Ready release PR по зеленому Check, ожидание мержа и прогона релиза, итог в release PR.
-Устройство - [сессия релиза](../../../docs/platform/delivery/ci-cd.md#сессия-релиза), правила веток -
-[`CONTRIBUTING.md` §11](../../../CONTRIBUTING.md#11-релиз-и-хотфикс).
+Устройство - [сессия релиза](../../../.harness/docs/ci-cd.md#сессия-релиза), правила веток -
+[`.harness/CONTRIBUTING.md` §11](../../../.harness/CONTRIBUTING.md#11-релиз-и-хотфикс).
 
 Сбой правишь ты сам, без конвейера `issue-dev`: упал Check release PR - PR правки в базовую ветку с
 кругом ревью, release PR закрывается как неактуальный после ее мержа; упал прогон релиза после мержа -

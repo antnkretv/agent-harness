@@ -2,7 +2,6 @@
 .sessions/
 /.harness/kit
 *.harness-new
-{{harness.placed}}
 /.harness/settings.env
 /.claude/skills
 /.claude/rules/harness-*.md

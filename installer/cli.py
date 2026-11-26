@@ -1,7 +1,7 @@
 """Установка, обновление и проверка harness в репозитории проекта.
 
 Установщик живет только в архиве комплекта и в проект не ставится. Порядок действий и критерии
-готовности - AGENT.md комплекта, устройство установленного слоя - docs/platform/agents/harness.md.
+готовности - AGENT.md комплекта, устройство установленного слоя - .harness/docs/harness.md.
 
     ./payload/.harness/hooks/python.cmd ah.py init --target <repo> --next  # подключение проекта: configure, затем apply
     ./payload/.harness/hooks/python.cmd ah.py configure --target <repo> --next  # следующий вопрос настройки JSON
@@ -88,7 +88,6 @@ def arguments() -> argparse.Namespace:
     applied = commands.add_parser("apply", help="установить или обновить harness")
     applied.add_argument("--dry-run", action="store_true", help="показать план без записи")
     applied.add_argument("--archive", help="архив этой сборки: его sha256 пишется в lock.json, а сам он - в кеш версий")
-    applied.add_argument("--source", help="каталог исходника комплекта в проекте: загрузчик собирает из него архив, если версии нет в кеше; пустое значение снимает")
     applied.set_defaults(handler=apply)
     commands.add_parser("install", help="поставить файлы комплекта версии из lock.json в рабочую копию").set_defaults(handler=install)
     verified = commands.add_parser("verify", help="приемка установки")
