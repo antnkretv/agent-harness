@@ -31,7 +31,7 @@ import text_data  # noqa: E402
 import text_forms  # noqa: E402
 from text_primitives import Violation, line_of  # noqa: E402
 
-FOLDER = ".harness/templates/"
+FOLDER = text_forms.FOLDER
 REGISTRY = FOLDER + "variables.json"
 PROMPTS = ".harness/prompts/"
 METHODOLOGY = ".harness/methodology.json"
@@ -41,10 +41,11 @@ INLINE = re.compile(r"`[^`\n]*`")
 INLINE_SPLIT = re.compile(f"({INLINE.pattern})")
 PROMPT_CALL = re.compile(r"""\btext_templates\.prompt\(\s*["']([^"']+)["']""")
 CALLED_PROMPTS = PROMPTS + "session/"
-TEMPLATES = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "templates")
+TEMPLATES = text_forms.TEMPLATES
 NAME = re.compile(r"[A-Z][A-Za-z0-9]*")
 FIELDS = {"about", "form", "part", "prompt", "required", "values"}
 PARTS = "parts/"
+FORMS = text_forms.FORMS
 CALL = re.compile(r"""\btext_templates\.render\(\s*["']([^"']+)["']""")
 COMMAND = re.compile(r"\btext_templates\.py render ([a-z0-9-]+/[a-z0-9-]+)")
 RUNTIME = {"ChangeLink", "SHA", "ChangeIssues", "ChangeFixes", "ChangeStats", "SessionLink", "SessionModel"}
@@ -174,9 +175,9 @@ def calls(files: Mapping[str, str], code: re.Pattern = CALL, docs: re.Pattern | 
     return found
 
 
-def templates(files: Mapping[str, str]) -> dict[str, tuple[str, str]]:
+def templates(files: Mapping[str, str], forms: bool = False) -> dict[str, tuple[str, str]]:
     return {path[len(FOLDER):-len(".md")]: (path, text) for path, text in files.items()
-            if path.startswith(FOLDER) and path.endswith(".md")}
+            if path.startswith(FOLDER) and path.endswith(".md") and path.startswith(FOLDER + FORMS) == forms}
 
 
 def surface(files: Mapping[str, str]) -> list[Violation]:
@@ -188,6 +189,7 @@ def surface(files: Mapping[str, str]) -> list[Violation]:
     except ValueError as error:
         return [Violation(REGISTRY, 1, msg("template_registry_unread"), str(error))]
     declared = data.get("variables", {})
+    kit_forms = templates(files, forms=True)
     style = data.get("style")
     if style is not None and not requirement(files, str(style)):
         found.append(Violation(REGISTRY, line_of(text, text.find('"style"')), msg("template_style_missing"),
@@ -241,6 +243,12 @@ def surface(files: Mapping[str, str]) -> list[Violation]:
         prompt = entry.get("prompt") if isinstance(entry, dict) else None
         if prompt is not None and not requirement(files, str(prompt)):
             found.append(Violation(REGISTRY, number, msg("template_prompt_missing"), str(prompt)))
+        form = str(entry.get("form", "")) if isinstance(entry, dict) else ""
+        if "/" in form and text_forms.FILL not in kit_forms.get(form, ("", ""))[1]:
+            found.append(Violation(REGISTRY, number, msg("template_form_kit_missing"), form))
+    named = {str(entry.get("form")) for entry in declared.values() if isinstance(entry, dict)}
+    found += [Violation(path, 1, msg("template_form_unnamed"), name)
+              for name, (path, _) in kit_forms.items() if name not in named]
     return found
 
 
@@ -509,7 +517,7 @@ def main() -> int:
     show = commands.add_parser("show")
     show.add_argument("template")
     show.set_defaults(run=command_show)
-    blank = commands.add_parser("form", help="заготовка формы площадки для переменной с полем form: форма по пути включенного расширения, первой строкой ее sha; требование к переменной и правила языка - в stderr")
+    blank = commands.add_parser("form", help="заготовка формы для переменной с полем form: форма комплекта из templates/forms/ или форма площадки по пути включенного расширения, первой строкой ее sha; требование к переменной и правила языка - в stderr")
     blank.add_argument("name", metavar="ИМЯ")
     blank.add_argument("--out", help="файл для заготовки; без него она печатается")
     blank.set_defaults(run=command_form)

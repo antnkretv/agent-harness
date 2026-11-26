@@ -2411,6 +2411,22 @@
       "module": "core",
       "role": "managed"
     },
+    ".harness/templates/forms/delegated.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/forms/pre-draft-audit.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/forms/review.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/forms/simplify.md": {
+      "module": "core",
+      "role": "managed"
+    },
     ".harness/templates/parts/token-note.md": {
       "module": "core",
       "role": "managed"

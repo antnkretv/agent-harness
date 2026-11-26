@@ -27,7 +27,7 @@
 | `.specify/templates/` | шаблоны артефактов Spec Kit |
 | [`.harness/README.md`](../../../.harness/README.md) | устройство скриптов и хуков платформы |
 | `.harness/project/manifest.json`, `.harness/methodology.json`, `.harness/pipelines.json` | исполняемые величины конвейера |
-| `.harness/templates/` (форма описания PR - `changeTemplate` поставщика кода, форма задачи - `issueTemplate` трекера) | шаблоны публикуемых текстов и формы тела PR и задачи: разделы и отметки автора |
+| `.harness/templates/` (форма описания PR - `changeTemplate` поставщика кода, форма задачи - `issueTemplate` трекера) | шаблоны публикуемых текстов, формы тела PR и задачи и формы отчетов агента (`templates/forms/`): разделы и отметки автора |
 | [`.harness/mcp-stand/README.md`](../../../.harness/mcp-stand/README.md) | развертывание и эксплуатация стенда MCP |
 | [`.agents/skills/README.md`](../../../.agents/skills/README.md) | индекс skills и подключение поставки |
 | `.agents/skills/<имя>/SKILL.md` и его `references/` | шаги агента в своей задаче: команда и ссылка на документ механизма, без объяснения механизма |
