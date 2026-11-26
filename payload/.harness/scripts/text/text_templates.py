@@ -246,6 +246,8 @@ def surface(files: Mapping[str, str]) -> list[Violation]:
         form = str(entry.get("form", "")) if isinstance(entry, dict) else ""
         if "/" in form and text_forms.FILL not in kit_forms.get(form, ("", ""))[1]:
             found.append(Violation(REGISTRY, number, msg("template_form_kit_missing"), form))
+        elif form and "/" not in form and not all(form.partition(".")[::2]):
+            found.append(Violation(REGISTRY, number, msg("template_form_spec"), form))
     named = {str(entry.get("form")) for entry in declared.values() if isinstance(entry, dict)}
     found += [Violation(path, 1, msg("template_form_unnamed"), name)
               for name, (path, _) in kit_forms.items() if name not in named]
