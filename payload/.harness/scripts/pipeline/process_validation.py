@@ -272,56 +272,46 @@ def check_docs_free_of_markers(problems: list[str]) -> None:
 
 
 def check_fact_copies(problems: list[str]) -> None:
-    roots = [ROOT]
     numbers = number_words()
     contexts = fact_contexts()
     numbered = re.compile(platform_messages.msg("pipeline_step_number"), re.I)
     compiled: dict[tuple[str, object], re.Pattern[str] | None] = {}
     marks = frozenset(mark.lower() for mark in platform_messages.msg("pipeline_step_marks").split(";"))
-    scanned: tuple[list, set[str], set[str]] | None = None
-    for root in roots:
-        try:
-            with open(os.path.join(root, ".harness", METHODOLOGY), encoding="utf-8") as handle:
-                methodology = json.load(handle)
-            declared = process_definitions(methodology["processes"])
-            with open(os.path.join(root, ".harness", PIPELINES), encoding="utf-8") as handle:
-                compositions = json.load(handle)
-            facts = process_facts(declared, compositions)
-            manifest_path = os.path.join(root, ".harness", "project/manifest.json")
-            project = {}
-            if os.path.isfile(manifest_path):
-                with open(manifest_path, encoding="utf-8") as handle:
-                    project = json.load(handle)
-        except (OSError, ValueError, KeyError) as error:
-            problems.append(msg("pipeline_contract_document", root, error))
-            continue
-        checks = []
-        for field, value in facts:
-            if (field, value) not in compiled:
-                compiled[field, value] = fact_pattern(field, value, numbers, contexts)
-            if compiled[field, value] is None:
-                problems.append(platform_messages.msg("pipeline_fact_no_context", field))
-            else:
-                checks.append((field, anchors(value, numbers), compiled[field, value]))
-        words = sorted(marks.union(*(found for _, found, _ in checks)), key=len, reverse=True)
-        scan = Scan(re.compile("|".join(map(re.escape, words))), marks, numbered, checks,
-                    {step["id"] for process in declared.values() for step in process["steps"]})
-        patterns = [pattern for record in rule_records(methodology, project) if record.get("enabled", True)
-                    for pattern in record.get("copies", [])]
-        paths = sorted({path for pattern in patterns for path in glob.glob(os.path.join(root, pattern))})
-        same_facts = scanned is not None and scanned[0] == facts and scanned[1] == scan.identities
-        if scanned is None:
-            scanned = (facts, scan.identities, {os.path.relpath(path, root) for path in paths})
-        for path in paths:
-            with open(path, "rb") as handle:
-                data = handle.read()
-            inner = os.path.relpath(path, root)
-            if same_facts and inner in scanned[2] and same_file(data, os.path.join(ROOT, inner)):
-                continue
-            relative = os.path.relpath(path, ROOT)
-            for number, field in scan.file(path, data.decode("utf-8")):
-                problems.append(platform_messages.msg("pipeline_fact_copy", relative, number, field) if field
-                                else platform_messages.msg("pipeline_step_number_copy", relative, number))
+    try:
+        with open(os.path.join(ROOT, ".harness", METHODOLOGY), encoding="utf-8") as handle:
+            methodology = json.load(handle)
+        declared = process_definitions(methodology["processes"])
+        with open(os.path.join(ROOT, ".harness", PIPELINES), encoding="utf-8") as handle:
+            compositions = json.load(handle)
+        facts = process_facts(declared, compositions)
+        manifest_path = os.path.join(ROOT, ".harness", "project/manifest.json")
+        project = {}
+        if os.path.isfile(manifest_path):
+            with open(manifest_path, encoding="utf-8") as handle:
+                project = json.load(handle)
+    except (OSError, ValueError, KeyError) as error:
+        problems.append(msg("pipeline_contract_document", ROOT, error))
+        return
+    checks = []
+    for field, value in facts:
+        if (field, value) not in compiled:
+            compiled[field, value] = fact_pattern(field, value, numbers, contexts)
+        if compiled[field, value] is None:
+            problems.append(platform_messages.msg("pipeline_fact_no_context", field))
+        else:
+            checks.append((field, anchors(value, numbers), compiled[field, value]))
+    words = sorted(marks.union(*(found for _, found, _ in checks)), key=len, reverse=True)
+    scan = Scan(re.compile("|".join(map(re.escape, words))), marks, numbered, checks,
+                {step["id"] for process in declared.values() for step in process["steps"]})
+    patterns = [pattern for record in rule_records(methodology, project) if record.get("enabled", True)
+                for pattern in record.get("copies", [])]
+    for path in sorted({path for pattern in patterns for path in glob.glob(os.path.join(ROOT, pattern))}):
+        with open(path, "rb") as handle:
+            data = handle.read()
+        relative = os.path.relpath(path, ROOT)
+        for number, field in scan.file(path, data.decode("utf-8")):
+            problems.append(platform_messages.msg("pipeline_fact_copy", relative, number, field) if field
+                            else platform_messages.msg("pipeline_step_number_copy", relative, number))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -403,14 +393,6 @@ def process_facts(declared: dict, compositions: dict) -> list[tuple[str, object]
             facts += [(f"pipelines.{name}.steps[{step['id']}].transitions.{state}.maxVisits", transition["maxVisits"])
                       for state, transition in step.get("transitions", {}).items()]
     return [(field, value) for field, value in facts if value or value == 0]
-
-
-def same_file(data: bytes, installed: str) -> bool:
-    try:
-        with open(installed, "rb") as handle:
-            return handle.read() == data
-    except OSError:
-        return False
 
 
 def anchors(value, numbers: list[str]) -> tuple[str, ...]:

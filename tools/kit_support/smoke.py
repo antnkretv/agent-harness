@@ -233,7 +233,7 @@ class Smoke:
         return self.expect(msg("smoke_verify"), self.harness("verify"), reason=unset)
 
     def isolated(self, kit: dict) -> None:
-        """Установленное дерево не знает репозитория происхождения: ни пути к нему, ни его следов."""
+        """Установленное дерево не знает каталога комплекта на машине сборки и следов проектов."""
         found = leaks(leak_rules(kit, installed=True), self.repo, run(["git", "ls-files"], self.repo).stdout.splitlines())
         self.check(msg("smoke_no_source_refs"), not found)
         self.problems += found[:20]

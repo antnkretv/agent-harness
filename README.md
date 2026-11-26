@@ -7,16 +7,19 @@
 
 ## Быстрый старт
 
-Подключить проект, один раз ([AGENT.md](AGENT.md), этапы установки):
+Скачать выпуск и сверить sha256, распаковать вне репозитория проекта:
 
 ```bash
 V=<версия>; URL=https://github.com/antnkretv/agent-harness/releases/download/v$V
 curl -fLO "$URL/agent-harness-$V.tar.gz" -fLO "$URL/agent-harness-$V.tar.gz.sha256"
-sha256sum -c "agent-harness-$V.tar.gz.sha256" && tar -xzf "agent-harness-$V.tar.gz"
-python3 "agent-harness-$V/ah.py" init --target <проект> --archive "agent-harness-$V.tar.gz" --next
+sha256sum -c "agent-harness-$V.tar.gz.sha256"
+mkdir -p "$HOME/.cache/harness" && tar -xzf "agent-harness-$V.tar.gz" -C "$HOME/.cache/harness"
 ```
 
-Вопросы `init` агент ведет скиллом `agent-harness-<версия>/skills/harness-init/SKILL.md` архива.
+Подключить проект, один раз: в сессии агента в клоне проекта попросить выполнить
+`$HOME/.cache/harness/agent-harness-<версия>/skills/harness-init/SKILL.md` с путем к архиву и его sha256.
+Скилл ведет этап 1 по [AGENT.md](AGENT.md): рабочая копия ветки установки, `doctor`, вопросы владельцу,
+установка и PR. Без чата те же шаги идут командами [STAGE-1.md](installer/stages/STAGE-1.md).
 
 Поставить у разработчика, в CI и в облачной сессии; хуки `post-checkout`, `post-merge` и старт сессии агента
 зовут ее сами:

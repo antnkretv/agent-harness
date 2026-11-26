@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from installer.catalog import load_catalog
@@ -17,7 +18,13 @@ def msg(key: str, *args: object) -> str:
 
 
 def manifest() -> dict:
-    return json.loads((KIT / "kit.json").read_text(encoding="utf-8"))
+    """Шаблоны следов проекта, который шлет правки в комплект, лежат вне репозитория: их файл называет
+    AGENT_HARNESS_LEAKS, и сверка добавляет их к шаблонам kit.json."""
+    kit = json.loads((KIT / "kit.json").read_text(encoding="utf-8"))
+    extra = os.environ.get("AGENT_HARNESS_LEAKS")
+    if extra:
+        kit["leaks"] = kit["leaks"] + json.loads(Path(extra).read_text(encoding="utf-8"))
+    return kit
 
 
 catalog = load_catalog

@@ -13,7 +13,7 @@ from .context import KIT, REFERENCE, TREES, catalog, msg
 
 
 def git(*args: str, data: bytes | None = None, accept: tuple[int, ...] = (0,)) -> bytes:
-    """Git от каталога комплекта: пути одни и в репозитории происхождения, и в своем репозитории комплекта."""
+    """Git от каталога комплекта: пути состава не зависят от того, где лежит checkout."""
     done = subprocess.run(["git", *args], cwd=KIT, input=data, capture_output=True)
     if done.returncode not in accept:
         raise SystemExit(msg("kit_git_failed", " ".join(args), done.stderr.decode("utf-8", "replace").strip()))
@@ -29,7 +29,7 @@ def tree_files() -> tuple[str, ...]:
 
 def leak_rules(kit: dict, installed: bool) -> list[tuple[re.Pattern[str], tuple[str, ...]]]:
     """В установленном дереве пути исключений читаются от корня проекта, а шаблоны со scope kit (пути
-    приложений, номера задач) законны и не применяются. Путь к репозиторию происхождения - след везде.
+    приложений, номера задач) законны и не применяются. Путь каталога комплекта на машине сборки - след везде.
     Имя технологии законно в каталоге и в файлах расширения, которое ее несет (modules правила)."""
     rules = [(re.compile(re.escape(str(KIT))), ())]
     for rule in kit["leaks"]:
