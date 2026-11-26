@@ -33,7 +33,7 @@ from .lock_install import archive_build, place_files, record_path, recorded
 from .state import Installer
 from .verify import run_gate
 
-KIT_FIELDS = ("name", "version", "repository", "digest", "config", "sha256", "tree", "source")
+KIT_FIELDS = ("name", "version", "repository", "digest", "config", "sha256", "tree", "source", "commit")
 
 
 def write_lock(root: Path, kit: dict, catalog: dict, paths: frozenset[str], files: dict, archive: tuple[str, str], source: str) -> None:
@@ -86,9 +86,9 @@ def _apply(args: argparse.Namespace, root: Path) -> int:
     same = build_of(installed) == build_of(kit)
     archive = (installed.get("sha256", ""), installed.get("tree", "")) if same else ("", "")
     if args.archive:
-        sha, build, tree = archive_build(Path(args.archive).resolve())
+        sha, shipped, tree = archive_build(Path(args.archive).resolve())
         archive = (sha, tree)
-        if build != build_of(kit):
+        if build_of(shipped) != build_of(kit):
             raise Refusal(msg("apply_archive_other", args.archive, kit_dir))
     elif installed.get("sha256") and not archive[0]:
         say("apply_unpinned", LOCK)

@@ -257,9 +257,13 @@ def relink(text: str, path: str, absent: set[str], references: dict[str, str]) -
 
 
 def reference_addresses(kit: dict) -> dict[str, str]:
-    base = f"{kit.get('repository', '')}/blob/v{kit['version']}/payload/"
+    base = f"{kit.get('repository', '')}/blob/{revision(kit)}/payload/"
     return {path: base + path for path, meta in kit["files"].items() if meta.get("place") == "reference"} \
         if kit.get("repository") else {}
+
+
+def revision(kit: dict) -> str:
+    return kit.get("commit") or f"v{kit['version']}"
 
 
 def absent_entries(kit: dict, paths: frozenset[str], catalog: dict) -> dict[str, dict]:

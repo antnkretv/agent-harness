@@ -12,7 +12,7 @@ from installer.resources import GUIDE_TEMPLATES, GUIDES, Refusal, sha256
 from .catalog_checks import every_module
 from .composition import composition
 from .context import KIT, SHIPPED, catalog, manifest, msg
-from .source import tree_files
+from .source import commit, tree_files
 
 
 def shipped_manifest(kit: dict, folder: Path) -> dict:
@@ -20,6 +20,8 @@ def shipped_manifest(kit: dict, folder: Path) -> dict:
     tree = {path.relative_to(folder).as_posix(): sha256(path.read_bytes())
             for path in sorted(folder.rglob("*")) if path.is_file() and path.name != "kit.json"}
     shipped = {key: value for key, value in kit.items() if key not in ("_", "files", "leaks", "provenance")}
+    if commit():
+        shipped["commit"] = commit()
     shipped["files"] = {
         path: {key: value for key, value in meta.items() if key != "listed"}
         for path, meta in sorted(kit["files"].items())}

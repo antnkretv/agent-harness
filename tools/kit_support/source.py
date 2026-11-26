@@ -21,6 +21,14 @@ def git(*args: str, data: bytes | None = None, accept: tuple[int, ...] = (0,)) -
 
 
 @functools.cache
+def commit() -> str:
+    """Коммит checkout без правок: по нему загрузчик проекта получит исходник и соберет тот же комплект."""
+    if git("status", "--porcelain", "--untracked-files=all").strip():
+        return ""
+    return git("rev-parse", "HEAD").decode("utf-8").strip()
+
+
+@functools.cache
 def tree_files() -> tuple[str, ...]:
     """Файлы деревьев комплекта по правилам .gitignore: кеш интерпретатора и выход сборки в состав не входят."""
     listed = git("ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *TREES).decode("utf-8").split("\0")
