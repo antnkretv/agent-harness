@@ -43,6 +43,7 @@
     },
     "AuditReport": {
       "about": "итог аудита перед PR",
+      "form": "forms/pre-draft-audit",
       "prompt": ".harness/prompts/stage/pre-draft-audit.md#итог"
     },
     "BackMergeChange": {
@@ -119,6 +120,7 @@
     },
     "DelegatedReport": {
       "about": "ответ исполнителя постановки",
+      "form": "forms/delegated",
       "prompt": "docs/platform/agents/delegated-task.md#ответ"
     },
     "ChangeStats": {
@@ -310,6 +312,7 @@
     },
     "ReviewReport": {
       "about": "итог skill review",
+      "form": "forms/review",
       "prompt": ".agents/skills/review/SKILL.md#ответ"
     },
     "ReviewResult": {
@@ -411,6 +414,7 @@
     },
     "SimplifyReport": {
       "about": "итог упрощения",
+      "form": "forms/simplify",
       "prompt": ".agents/skills/code-simplifier/SKILL.md#3-правки"
     },
     "StageDefinition": {

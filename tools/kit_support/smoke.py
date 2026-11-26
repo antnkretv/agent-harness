@@ -250,6 +250,7 @@ class Smoke:
         self.expect(msg("smoke_self_hooks"), [sys.executable, ".harness/tests/hooks.py"])
         self.expect(msg("smoke_self_review_plan"), [sys.executable, ".harness/tests/review-plan.py"])
         self.expect(msg("smoke_self_tracker_close"), [sys.executable, ".harness/tests/tracker-close.py"])
+        self.expect(msg("smoke_self_text_forms"), [sys.executable, ".harness/tests/text-forms.py"])
         self.restore()
         self.change_gates()
         self.kit_weakening()
