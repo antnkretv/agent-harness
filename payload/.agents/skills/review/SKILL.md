@@ -87,5 +87,6 @@ origin: скрипт отказывает, если рабочая копия н
 
 ## Ответ
 
-В ответе укажи PR, тип круга, итоги проходов и незакрытые блокировки: собери его командой
+В ответе укажи PR, тип круга, итоги проходов и незакрытые блокировки: заполни слоты заготовки
+`./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py form ReviewReport --out <файл>` и собери ответ командой
 `./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py render report/review --set-file ReviewReport=<файл> --change <PR>`. Сам вызов ревью не переводит PR в Ready.

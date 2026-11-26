@@ -15,11 +15,19 @@ FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 BOX = "- [ ] "
 CHECKED = "- [x] "
 UNMET = msg("template_form_unmet")
+FOLDER = ".harness/templates/"
+
+
+def kit_form(spec: str) -> bool:
+    return "/" in spec
 
 
 def located(spec: str) -> tuple[str, str, str]:
-    module, _, field = spec.partition(".")
-    path = manifest.extension_value(module, field)
+    if kit_form(spec):
+        path = FOLDER + spec + ".md"
+    else:
+        module, _, field = spec.partition(".")
+        path = manifest.extension_value(module, field)
     try:
         with open(os.path.join(ROOT, path), "rb") as handle:
             data = handle.read()
@@ -104,9 +112,10 @@ def applies(item: str, chosen: set[str]) -> bool:
 
 def picked(title: str, rule: str, form: str, given: str, chosen: set[str]) -> list[str]:
     tail = rf"(?:{re.escape(UNMET)} +(\S[\s\S]*))?" if rule == "pick: all" else ""
-    wanted = [WHEN.sub("", item) for item in items(form) if applies(item, chosen)]
-    last, marks, answered, problems = -1, 0, set(), []
-    choices = [item_pattern(item, tail) for item in wanted]
+    listed = [(WHEN.sub("", item), applies(item, chosen)) for item in items(form)]
+    wanted = listed if tail else [entry for entry in listed if entry[1]]
+    last, marks, answered, kept, problems = -1, 0, set(), set(), []
+    choices = [item_pattern(item, tail) for item, _ in wanted]
     for item in items(given):
         index, found = next(((index, found) for index in range(last + 1, len(choices))
                              if (found := choices[index].fullmatch(item))), (None, None))
@@ -122,13 +131,15 @@ def picked(title: str, rule: str, form: str, given: str, chosen: set[str]) -> li
             problems.append(msg("template_form_fill", title))
         marks += checked
         last = index
+        kept.add(index)
         if checked and not tail:
             chosen.add(item[len(CHECKED):].split()[0])
     if rule == "pick: some" and not marks:
         problems.append(msg("template_form_pick_some", title))
     if tail:
         problems += [msg("template_form_check", title, UNMET, want.splitlines()[0])
-                     for index, want in enumerate(wanted) if index not in answered]
+                     for index, (want, needed) in enumerate(wanted)
+                     if (needed or index in kept) and index not in answered]
     return problems
 
 
