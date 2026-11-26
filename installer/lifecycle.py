@@ -69,7 +69,7 @@ def upgrade(args: argparse.Namespace) -> int:
 def upgraded(args: argparse.Namespace, root: Path, installed: dict, source: str, archive: Path) -> int:
     sha, shipped, tree = archive_build(archive)
     previous, version = label(installed), label(shipped)
-    if sha == read_lock(root)["kit"]["sha256"]:
+    if tree == read_lock(root)["kit"].get("tree"):
         say("upgrade_current", previous, sha[:12])
         return 0
     ah = loader()
@@ -84,7 +84,7 @@ def upgraded(args: argparse.Namespace, root: Path, installed: dict, source: str,
                        "--type", "chore", "--key", UPGRADE_KEY], root)
         found = json.loads(started.stdout)
         work, branch = Path(found["path"]), found["branch"]
-    if read_lock(work)["kit"]["sha256"] != sha:
+    if read_lock(work)["kit"].get("tree") != tree:
         asked = json.loads(run(new + ["configure", "--target", str(work), "--next"], work).stdout)
         if not asked.get("done") or asked.get("problems"):
             print(asked.get("show", ""))
@@ -162,7 +162,7 @@ def committed(repository: str, ref: str) -> Path:
     except OSError as error:
         raise Refusal(msg("upgrade_fetch_failed", ref, repository, error)) from None
     try:
-        return ah.built(source)
+        return ah.built(source, True)
     finally:
         shutil.rmtree(source, ignore_errors=True)
 

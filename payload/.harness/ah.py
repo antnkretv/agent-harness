@@ -75,10 +75,10 @@ def unpacked(archive: Path, home: Path, tree: str, sha: str = "") -> Path:
     return home
 
 
-def built(source: Path) -> Path:
+def built(source: Path, commit: bool = False) -> Path:
     CACHE.mkdir(parents=True, exist_ok=True)
     out = Path(tempfile.mkdtemp(prefix=".build-", dir=CACHE))
-    if subprocess.run([sys.executable, str(source / "tools" / "kit.py"), "build", "--out", str(out)],
+    if subprocess.run([sys.executable, str(source / "tools" / "kit.py"), "build", "--out", str(out), *(["--commit"] if commit else [])],
                       stdout=subprocess.DEVNULL).returncode:
         shutil.rmtree(out, ignore_errors=True)
         sys.exit(msg("unbuilt", source))
@@ -90,15 +90,19 @@ def fetched(repository: str, ref: str) -> Path:
     CACHE.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=".fetch-", dir=CACHE))
     for command in (["init", "-q"], ["fetch", "-q", "--depth", "1", repository, ref], ["checkout", "-q", "--detach", "FETCH_HEAD"]):
-        done = subprocess.run(["git", "-C", str(work), *command], capture_output=True, text=True)
+        try:
+            done = subprocess.run(["git", "-C", str(work), *command], capture_output=True, text=True, timeout=300)
+        except subprocess.TimeoutExpired as error:
+            shutil.rmtree(work, ignore_errors=True)
+            raise OSError(str(error)) from None
         if done.returncode:
             shutil.rmtree(work, ignore_errors=True)
             raise OSError(done.stderr.strip())
     return work
 
 
-def from_source(source: Path, tree: str) -> Path:
-    archive = built(source)
+def from_source(source: Path, tree: str, commit: bool = False) -> Path:
+    archive = built(source, commit)
     try:
         return unpacked(archive, CACHE / f"src-{tree}", tree)
     finally:
@@ -150,7 +154,7 @@ def main(args: list[str]) -> int:
         except OSError as error:
             sys.exit(msg("fetch", kit["commit"][:12], kit["repository"], error))
         try:
-            home = from_source(source, tree)
+            home = from_source(source, tree, True)
         finally:
             shutil.rmtree(source, ignore_errors=True)
     elif home is None and kit.get("repository"):

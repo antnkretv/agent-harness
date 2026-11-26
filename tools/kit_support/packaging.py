@@ -15,13 +15,13 @@ from .context import KIT, SHIPPED, catalog, manifest, msg
 from .source import commit, tree_files
 
 
-def shipped_manifest(kit: dict, folder: Path) -> dict:
+def shipped_manifest(kit: dict, folder: Path, revision: str = "") -> dict:
     """Состав собранного комплекта: digest - по файлам, какими они легли в архив."""
     tree = {path.relative_to(folder).as_posix(): sha256(path.read_bytes())
             for path in sorted(folder.rglob("*")) if path.is_file() and path.name != "kit.json"}
     shipped = {key: value for key, value in kit.items() if key not in ("_", "files", "leaks", "provenance")}
-    if commit():
-        shipped["commit"] = commit()
+    if revision:
+        shipped["commit"] = revision
     shipped["files"] = {
         path: {key: value for key, value in meta.items() if key != "listed"}
         for path, meta in sorted(kit["files"].items())}
@@ -29,7 +29,7 @@ def shipped_manifest(kit: dict, folder: Path) -> dict:
     return shipped
 
 
-def stage(kit: dict, out: Path) -> Path:
+def stage(kit: dict, out: Path, revision: str = "") -> Path:
     """Каталог полного комплекта. Инструкции установки в нем - под все модули, а их шаблоны лежат рядом: из
     них pack рендерит инструкции архива под решения."""
     name = f"{kit['name']}-{kit['version']}"
@@ -48,7 +48,7 @@ def stage(kit: dict, out: Path) -> Path:
         target.write_text(guide, encoding="utf-8", newline="\n")
     for path in tree_files():
         ship(path, folder)
-    (folder / "kit.json").write_text(json_text(shipped_manifest(kit, folder)), encoding="utf-8", newline="\n")
+    (folder / "kit.json").write_text(json_text(shipped_manifest(kit, folder, revision)), encoding="utf-8", newline="\n")
     return folder
 
 
@@ -59,6 +59,10 @@ def build(args: argparse.Namespace) -> int:
         print("\n".join(problems))
         return 1
     out = Path(args.out).resolve()
+    revision = commit() if args.commit else ""
+    if args.commit and not revision:
+        print(msg("kit_commit_dirty"))
+        return 1
     if args.config:
         # Архив под решения собирается тем же pack, что и у владельца: из каталога полного комплекта.
         with tempfile.TemporaryDirectory() as folder:
@@ -69,7 +73,7 @@ def build(args: argparse.Namespace) -> int:
                 return 2
         print(msg("kit_packed", packed, sha256(packed.read_bytes())))
         return 0
-    folder = stage(kit, out)
+    folder = stage(kit, out, revision)
     packed = archive(folder)
     print(msg("kit_built", folder, packed, sha256(packed.read_bytes())))
     return 0

@@ -20,7 +20,6 @@ def git(*args: str, data: bytes | None = None, accept: tuple[int, ...] = (0,)) -
     return done.stdout
 
 
-@functools.cache
 def commit() -> str:
     """Коммит checkout без правок: по нему загрузчик проекта получит исходник и соберет тот же комплект."""
     if git("status", "--porcelain", "--untracked-files=all").strip():

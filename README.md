@@ -11,7 +11,7 @@
 
 ```bash
 git clone -b develop https://github.com/antnkretv/agent-harness "$HOME/src/agent-harness"
-python3 "$HOME/src/agent-harness/tools/kit.py" build --out "$HOME/.cache/harness"   # печатает архив и sha256
+python3 "$HOME/src/agent-harness/tools/kit.py" build --commit --out "$HOME/.cache/harness"   # архив и sha256
 ```
 
 Подключить проект, один раз: в сессии агента в клоне проекта попросить выполнить

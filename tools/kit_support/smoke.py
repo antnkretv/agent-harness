@@ -709,7 +709,8 @@ class Smoke:
         self.write_json(LOCK, lock)
         self.write("docs/own.md", f"<{source.as_uri()}/blob/{old}/payload/docs/platform/agents/harness.md>\n")
         self.commit("chore: harness")
-        empty = {"AGENT_HARNESS_CACHE": str(self.work / "commit-cache")}
+        empty = {"AGENT_HARNESS_CACHE": str(self.work / "commit-cache"),
+                 "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.autocrlf", "GIT_CONFIG_VALUE_0": "true"}
         self.expect(msg("smoke_commit_built"), [sys.executable, str(self.repo / LOADER), "install"], env=empty)
         self.check(msg("smoke_commit_cached"), (self.work / "commit-cache" / f"src-{lock['kit']['tree']}" / "ah.py").is_file())
         edited = source / "payload" / EDITED
@@ -721,10 +722,16 @@ class Smoke:
         self.expect(msg("smoke_commit_upgrade"), self.harness("upgrade", "--commit", "develop", "--no-pr"))
         self.check(msg("smoke_commit_upgraded"), self.read_json(LOCK)["kit"].get("commit") == new
                    and self.read(EDITED).endswith("smoke-kit-line\n") and f"/blob/{new}/" in self.read("docs/own.md"))
+        lock = self.read_json(LOCK)
+        lock["kit"]["repository"] = source.as_uri()
+        self.write_json(LOCK, lock)
+        self.commit("chore: harness next")
+        self.expect(msg("smoke_commit_current"), self.harness("upgrade", "--commit", "develop", "--no-pr"),
+                    reason=kit_msg("upgrade_current", "\0", "\0").split("\0")[0])
 
     def commit_build(self, source: Path, out: Path) -> Path:
-        """Сборка kit.py build из чистого checkout: архив несет коммит, а каталог распакован рядом."""
-        run([sys.executable, str(source / "tools" / "kit.py"), "build", "--out", str(out)], source)
+        """Сборка kit.py build --commit из чистого checkout: архив несет коммит, а каталог распакован рядом."""
+        run([sys.executable, str(source / "tools" / "kit.py"), "build", "--out", str(out), "--commit"], source)
         (packed,) = out.glob("*.tar.gz")
         unpacked = out / "unpacked"
         unpack(packed, unpacked)

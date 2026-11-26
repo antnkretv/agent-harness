@@ -1,6 +1,6 @@
 """Сборка и сверка комплекта harness в его репозитории.
 
-    payload/.harness/hooks/python.cmd tools/kit.py build [--out <каталог>]   # каталог и архив полного комплекта
+    payload/.harness/hooks/python.cmd tools/kit.py build [--out <каталог>] [--commit]   # каталог и архив полного комплекта
     payload/.harness/hooks/python.cmd tools/kit.py build --config <файл>     # архив под решения манифеста или config.json
     payload/.harness/hooks/python.cmd tools/kit.py check [--adapters | --no-smoke]  # состав, следы, комментарии, воспроизводимость, smoke
 
@@ -58,6 +58,7 @@ def main() -> int:
     built = commands.add_parser("build", help="собрать каталог и архив комплекта")
     built.add_argument("--out", default=str(KIT / "dist"), help="каталог результата")
     built.add_argument("--config", help="манифест проекта или config.json: архив под эти решения")
+    built.add_argument("--commit", action="store_true", help="записать в kit.json коммит checkout без правок: проект на нем ставится без выпуска")
     built.set_defaults(handler=build)
     checked = commands.add_parser("check", help="сверка комплекта и smoke-установка")
     smoked = checked.add_mutually_exclusive_group()
