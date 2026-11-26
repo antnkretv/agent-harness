@@ -148,9 +148,38 @@ def counts(marks: list[Mark], marker: str, head: str, base: str = "", policy: st
     return spent, last, streak, since
 
 
+def approval(marks: list[Mark], marker: str) -> tuple[str, int]:
+    sha, at = "", -1
+    for index, mark in enumerate(marks):
+        if not mine(mark, marker):
+            continue
+        if held(mark.state, mark.headline):
+            sha, at = "", -1
+        elif settled(mark.state, mark.headline) and not local(mark.headline) and mark.sha:
+            sha, at = mark.sha, index
+    return sha, at
+
+
+def approved_head(marks: list[Mark]) -> str:
+    found = [approval(marks, entry.get("marker", "")) for entry in passes()]
+    return max(found, key=lambda item: item[1])[0] if found and all(sha for sha, _ in found) else ""
+
+
+def reopened(marks: list[Mark], head: str) -> str:
+    import post_approval
+
+    approved = approved_head(marks)
+    if not approved or approved == head:
+        return ""
+    fix = post_approval.judge(approved, head)
+    print(annotation("notice", "plan_fix_accepted" if fix.accepted else "plan_fix_reopened", approved[:9], fix.why))
+    return "" if fix.accepted else approved
+
+
 def route(marks: list[Mark], changed: list[str], head: str, base: str = "", policy: str = "", task: str = "") -> list[Route]:
     stall = get("processes.review.stallRounds", 0, file=PIPELINE)
     found = []
+    since_fix = reopened(marks, head)
     for entry in passes():
         name = entry.get("id", "")
         spent, last, streak, since = counts(marks, entry.get("marker", ""), head, base, policy, task)
@@ -159,7 +188,9 @@ def route(marks: list[Mark], changed: list[str], head: str, base: str = "", poli
         within = spent < budget
         run, why = within, msg("plan_budget_spent")
         outcome = "pending" if run else "budget-exhausted"
-        if last == OK:
+        if last == OK and since_fix:
+            last, since = "", since_fix
+        elif last == OK:
             run, why, outcome = False, msg("plan_already_approved"), "approved"
             print(annotation("notice", "plan_approved_note", name))
         if run and last != BLOCK and prose_only(entry, changed):

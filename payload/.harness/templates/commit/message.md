@@ -1,3 +1,5 @@
 ${CommitSubject}
 
 ${CommitBody}
+
+${ChangeFixes}

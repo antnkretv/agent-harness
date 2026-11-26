@@ -2849,6 +2849,22 @@
       "executable": true,
       "module": "core",
       "role": "managed"
+    },
+    ".harness/prompts/session/gates-wait.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/gates-fix.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/review/post_approval.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/parts/change-fixes.md": {
+      "module": "core",
+      "role": "managed"
     }
   }
 }

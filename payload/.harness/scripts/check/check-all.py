@@ -10,6 +10,7 @@
     ./.harness/hooks/python.cmd .harness/scripts/check/check-all.py --gates-only       # приложения уже проверил CI
     ./.harness/hooks/python.cmd .harness/scripts/check/check-all.py --tree             # гейты дерева без сборки и тестов приложений
     ./.harness/hooks/python.cmd .harness/scripts/check/check-all.py --docs             # гейты документации по всему дереву: этап 2 установки
+    ./.harness/hooks/python.cmd .harness/scripts/check/check-all.py --change           # только гейты данных PR при PR_NUMBER: шаг gates сессии
 
 В CI поставщика кода журнал идет группами и аннотациями его разметки, итог ложится
 на страницу прогона; разметку дает .harness/lib/forge.py, флага у нее нет.
@@ -54,6 +55,9 @@ class Outcome:
     seconds: float = 0.0
     note: str = ""
     off: str = ""
+
+
+CHANGE_GATES = ("pipeline", "pr-issue-link", "pr-size")
 
 
 def prose_needed(changed: list[str]) -> bool:
@@ -177,9 +181,9 @@ def plan(base: str, changed: list[str], docs: bool = False,
     elif prose_needed(changed):
         gates.append(Gate("prose", [python, scripts + "vale-lint.py", "--base", base]))
     if os.environ.get("PR_NUMBER"):
-        gates.append(Gate("pipeline", [python, ".harness/scripts/pipeline/task-worktree.py", "ci", "--base", base]))
-        gates.append(Gate("pr-issue-link", [python, scripts + "check-pr-issue-link.py"]))
-        gates.append(Gate("pr-size", [python, scripts + "check-pr-size.py", "--base", base]))
+        gates.append(Gate(CHANGE_GATES[0], [python, ".harness/scripts/pipeline/task-worktree.py", "ci", "--base", base]))
+        gates.append(Gate(CHANGE_GATES[1], [python, scripts + "check-pr-issue-link.py"]))
+        gates.append(Gate(CHANGE_GATES[2], [python, scripts + "check-pr-size.py", "--base", base]))
     gates += [Gate(module, record["command"] if isinstance(record["command"], list) else [])
               for module, record in modules().items() if record.get("command")]
 
@@ -297,6 +301,8 @@ def main() -> int:
                        help="гейты дерева: без команд приложений, сборки и архитектурных тестов")
     scope.add_argument("--docs", action="store_true",
                        help="только гейты документации, по всему дереву: этап 2 установки harness")
+    scope.add_argument("--change", action="store_true",
+                       help="только гейты данных запроса на слияние: связь с задачей, размер и сверка коммитов с веткой")
     args = parser.parse_args()
 
     if subprocess.run(["git", "rev-parse", "--verify", "--quiet", args.base], cwd=ROOT,
@@ -313,7 +319,9 @@ def main() -> int:
         gates = [gate for gate in gates if not gate.code]
     if args.docs:
         gates = [gate for gate in gates if gate.docs]
-    if args.gates_only or args.tree or args.docs:
+    if args.change:
+        gates = [gate for gate in gates if gate.module in CHANGE_GATES]
+    if args.gates_only or args.tree or args.docs or args.change:
         apps = []
     if args.list:
         print(json.dumps({"changed": len(changed), "since": since, "gates": [g.module or g.title for g in gates if g.unset is None],

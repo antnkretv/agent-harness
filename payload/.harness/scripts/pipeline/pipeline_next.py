@@ -39,7 +39,7 @@ STALL = 3
 ENTRY = {"base": re.compile(r".+"), "review": re.compile(r"ci|local"), "rounds": re.compile(r"0|[1-9][0-9]*|max"),
          "merge": re.compile(r"human|agent")}
 RELEASE_ENTRY = ("merge",)
-WAITS = ("review-wait", "release-wait")
+WAITS = ("review-wait", "gates-wait", "release-wait")
 RELEASE_START_MINUTES = 180
 BACKGROUND_HOURS = 2
 PIPELINE_COMMANDS = ("pipeline-run.py", "review-local.py")
@@ -437,11 +437,27 @@ def verdicts(pull) -> tuple[dict[str, dict], set[str]]:
 
 def pending_passes(pull, current: dict) -> list[dict]:
     entries = review_policy.passes()
+    if reopened(pull, current):
+        return entries
     missing = {entry["id"] for entry in entries if entry["id"] not in current}
     files = (forge.change_files(pull.number) or []) if missing else []
     return [entry for entry in entries
             if current.get(entry["id"], {}).get("state") != "approve"
             and not (entry["id"] in missing and review_policy.prose_only(entry, files))]
+
+
+def approved_head(current: dict) -> str:
+    items = [current.get(entry["id"], {}) for entry in review_policy.passes()]
+    if not items or any(item.get("state") != "approve" for item in items):
+        return ""
+    return max(items, key=lambda item: moment(item["at"]))["sha"]
+
+
+def reopened(pull, current: dict) -> bool:
+    import post_approval
+
+    approved = approved_head(current)
+    return bool(approved and approved != pull.head_sha and not post_approval.judge(approved, pull.head_sha).accepted)
 
 
 def watching(root: Path, change: int) -> bool:
@@ -686,6 +702,21 @@ class Flow:
             return Step("ready-local", text, head=self.head)
         return None
 
+    def verified(self, step: dict) -> Step | None:
+        check = head_checks(self.head).get(check_context())
+        state = getattr(check, "state", "")
+        if state == "success" and getattr(check, "kind", "") == "job":
+            return self.by_actor(step)
+        import post_approval
+
+        values = self.values(step, ChangeNumber=self.pull.number, CheckName=check_context(),
+                             CheckUrl=getattr(check, "url", ""),
+                             FixLines=post_approval.policy().get("lines", 0))
+        if state in ("", "pending", "skipped", "success"):
+            return Step("gates-wait", text_templates.prompt("session/gates-wait", values), head=self.head,
+                        counted=False)
+        return self.step(step, text_templates.prompt("session/gates-fix", values))
+
     def merged(self, step: dict) -> Step | None:
         return None if self.pull.state == "merged" else self.by_actor(step)
 
@@ -789,7 +820,7 @@ class Flow:
 
 FACTS = {"branch": Flow.branch, "clarified": Flow.clarified, "merged-base": Flow.merged_base,
          "commits": Flow.commits, "simplification-checkpoint": Flow.clean, "pushed-head": Flow.pushed,
-         "draft-pr": Flow.opened, "ready-pr": Flow.ready, "merged": Flow.merged, "retired-workspace": Flow.retired}
+         "draft-pr": Flow.opened, "ready-pr": Flow.ready, "verified-head": Flow.verified, "merged": Flow.merged, "retired-workspace": Flow.retired}
 
 
 def unreviewed(state: dict) -> bool:

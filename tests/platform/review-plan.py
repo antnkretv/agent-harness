@@ -187,6 +187,62 @@ report("слова у локального круга те же", {ok_word, bloc
 report("слово правок у маршрутизатора то же", True, block_word in plan.CHANGES.pattern)
 report("слово апрува у маршрутизатора то же", True, ok_word in plan.APPROVE.pattern)
 
+# Правка после апрува всех проходов: без нового круга проходит только маленькая
+# правка файлов, которые назвал упавший Check, или файлов сборки и тестов.
+import subprocess
+import tempfile
+
+import post_approval
+
+
+def committed(repo: str, files: dict[str, str], message: str) -> str:
+    for name, text in files.items():
+        path = Path(repo, name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", message],
+                   check=True, capture_output=True)
+    return subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"], check=True, capture_output=True,
+                          text=True).stdout.strip()
+
+
+def approved_rows(sha: str) -> list[tuple[str, str, str]]:
+    return [(OK, f"{entry['marker']}: {sha}", sha) for entry in plan.passes()]
+
+
+def fixed(files: dict[str, str], log: str) -> dict:
+    with tempfile.TemporaryDirectory() as repo:
+        subprocess.run(["git", "init", "-q", repo], check=True, capture_output=True)
+        approved = committed(repo, {"src/App/Foo.cs": "a\n", "src/App/Bar.cs": "b\n"}, "base")
+        head = committed(repo, files, "fix")
+        post_approval.ROOT, post_approval.named = repo, lambda *_: log
+        post_approval.judge.cache_clear()
+        with contextlib.redirect_stdout(io.StringIO()):
+            routes = plan.route([plan.Mark(*row) for row in approved_rows(approved)], list(files), head)
+        return {item.name: item for item in routes}
+
+
+limit = post_approval.policy()["lines"]
+named_log = "error src/App/Foo.cs:1: CS1002"
+routes = fixed({"src/App/Foo.cs": "a;\n"}, named_log)
+report("правка названного Check файла апрувы не снимает", set(), {name for name, item in routes.items() if item.run})
+routes = fixed({"src/App/Bar.cs": "b;\n"}, named_log)
+report("правка неназванного файла поднимает все проходы", {entry["id"] for entry in plan.passes()},
+       {name for name, item in routes.items() if item.run})
+report("новый круг разбирает дифф от одобренной головы", True, all(item.since for item in routes.values()))
+routes = fixed({"src/App/Foo.cs": "".join(f"{n}\n" for n in range(limit))}, named_log)
+report("правка от предела строк поднимает проходы", True, all(item.run for item in routes.values()))
+routes = fixed({"tests/App/FooTests.cs": "t\n"}, named_log)
+report("правка теста без упоминания в журнале апрувы не снимает", False, any(item.run for item in routes.values()))
+post_approval.ROOT = ROOT
+post_approval.judge.cache_clear()
+with contextlib.redirect_stdout(io.StringIO()):
+    routes = plan.route([plan.Mark(*row) for row in approved_rows("aaa1111")], ["src/App/Foo.cs"], HEAD)
+report("непрочитанный дифф правки поднимает проходы", True, all(item.run for item in routes))
+decided, _ = run([(OK, "aaa1111")], ["src/App/Foo.cs"])
+report("апрув одного прохода правилом правки не задет", "false", decided.get("run_architecture"))
+
 print()
 if failed:
     print(f"review-plan: провалено {failed} из {checked}", file=sys.stderr)
