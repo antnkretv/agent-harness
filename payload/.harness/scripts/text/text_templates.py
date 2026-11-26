@@ -41,11 +41,11 @@ INLINE = re.compile(r"`[^`\n]*`")
 INLINE_SPLIT = re.compile(f"({INLINE.pattern})")
 PROMPT_CALL = re.compile(r"""\btext_templates\.prompt\(\s*["']([^"']+)["']""")
 CALLED_PROMPTS = PROMPTS + "session/"
-TEMPLATES = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "templates")
+TEMPLATES = text_forms.TEMPLATES
 NAME = re.compile(r"[A-Z][A-Za-z0-9]*")
 FIELDS = {"about", "form", "part", "prompt", "required", "values"}
 PARTS = "parts/"
-FORMS = "forms/"
+FORMS = text_forms.FORMS
 CALL = re.compile(r"""\btext_templates\.render\(\s*["']([^"']+)["']""")
 COMMAND = re.compile(r"\btext_templates\.py render ([a-z0-9-]+/[a-z0-9-]+)")
 RUNTIME = {"ChangeLink", "SHA", "ChangeIssues", "ChangeFixes", "ChangeStats", "SessionLink", "SessionModel"}
@@ -244,7 +244,7 @@ def surface(files: Mapping[str, str]) -> list[Violation]:
         if prompt is not None and not requirement(files, str(prompt)):
             found.append(Violation(REGISTRY, number, msg("template_prompt_missing"), str(prompt)))
         form = str(entry.get("form", "")) if isinstance(entry, dict) else ""
-        if text_forms.kit_form(form) and text_forms.FILL not in kit_forms.get(form, ("", ""))[1]:
+        if "/" in form and text_forms.FILL not in kit_forms.get(form, ("", ""))[1]:
             found.append(Violation(REGISTRY, number, msg("template_form_kit_missing"), form))
     named = {str(entry.get("form")) for entry in declared.values() if isinstance(entry, dict)}
     found += [Violation(path, 1, msg("template_form_unnamed"), name)

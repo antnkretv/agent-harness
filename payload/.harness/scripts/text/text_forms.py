@@ -16,20 +16,23 @@ BOX = "- [ ] "
 CHECKED = "- [x] "
 UNMET = msg("template_form_unmet")
 FOLDER = ".harness/templates/"
+FORMS = "forms/"
+TEMPLATES = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "templates")
 
 
 def kit_form(spec: str) -> bool:
-    return "/" in spec
+    return spec.startswith(FORMS)
 
 
 def located(spec: str) -> tuple[str, str, str]:
     if kit_form(spec):
-        path = FOLDER + spec + ".md"
+        path, full = FOLDER + spec + ".md", os.path.join(TEMPLATES, *spec.split("/")) + ".md"
     else:
         module, _, field = spec.partition(".")
         path = manifest.extension_value(module, field)
+        full = os.path.join(ROOT, path)
     try:
-        with open(os.path.join(ROOT, path), "rb") as handle:
+        with open(full, "rb") as handle:
             data = handle.read()
     except OSError as error:
         raise ValueError(msg("template_form_missing", f"{spec}: {error}")) from None

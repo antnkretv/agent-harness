@@ -4,8 +4,9 @@
 Отказ здесь останавливает агента на шаге, который требует заготовку формы, или
 отклоняет описание PR, собранное по правилу чеклиста. Таблица держит выдачу
 заготовки каждой переменной с полем form и сборку заполненной заготовки ее
-шаблоном, а также пункт чеклиста вне набора типов изменения: с причиной он
-проходит, без причины - нет.
+шаблоном. Заготовка описания PR оставляет пункты чеклиста вне набора типов
+изменения неотмеченными с причиной и проходит; без причины ее отклоняет
+отдельный сценарий.
 
     python3 .harness/tests/text-forms.py
 """
@@ -13,7 +14,6 @@
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import sys
 import tempfile
@@ -26,11 +26,14 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 ROOT = Path(__file__).resolve().parents[2]
-TEXT = ROOT / ".harness" / "scripts" / "text" / "text_templates.py"
+SCRIPTS = ROOT / ".harness" / "scripts"
+TEXT = SCRIPTS / "text" / "text_templates.py"
 TEMPLATES = ROOT / ".harness" / "templates"
-FILL = "<!-- fill -->"
-UNMET = ". Невыполнимо: к изменению не относится"
-WHEN = re.compile(r" *<!-- when: ([\w ]+) -->$")
+sys.path[:0] = [str(SCRIPTS), str(SCRIPTS / "text")]
+import script_paths  # noqa: E402,F401
+from text_forms import FILL, UNMET, WHEN  # noqa: E402
+
+REASON = UNMET + " к изменению не относится"
 REPORTS = ("AuditReport", "ReviewReport", "SimplifyReport", "DelegatedReport")
 failed = 0
 
@@ -74,7 +77,7 @@ def filled(form: str, kind: str = "docs", reason: bool = True) -> str:
                 if not keys or kind in keys.group(1).split():
                     line = line.replace("- [ ] ", "- [x] ", 1)
                 elif reason:
-                    line = WHEN.sub("", line) + UNMET + keys.group(0)
+                    line = WHEN.sub("", line) + REASON + keys.group(0)
             lines.append(line.replace(FILL, "текст"))
     return "\n".join(lines)
 
@@ -100,9 +103,6 @@ def form_cases(work: Path) -> None:
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     for name, spec in forms().items():
         blank, refusal = skeleton(name)
-        if "." in spec and not blank:
-            print(f"  SKIP  {name}: форма {spec} не установлена")
-            continue
         source = work / f"{name}.md"
         source.write_text(filled(blank), encoding="utf-8")
         done = text("render", owner(name), "--set-file", f"{name}={source}", "--commit", head)
@@ -112,15 +112,11 @@ def form_cases(work: Path) -> None:
 
 def checklist_cases(work: Path) -> None:
     blank = skeleton("ChangeBody")[0]
-    if "<!-- when:" not in blank:
-        print("  SKIP  чеклист: форма PR без пунктов when")
-        return
-    for title, reason, code in (("пункт чеклиста вне набора с причиной принят", True, 0),
-                                ("пункт чеклиста вне набора без причины отклонен", False, 1)):
-        source = work / "body.md"
-        source.write_text(filled(blank, reason=reason), encoding="utf-8")
-        done = text("render", "change/description", "--set-file", f"ChangeBody={source}")
-        report(title, done.returncode == code and (code == 0 or "Невыполнимо" in done.stderr), done.stderr)
+    source = work / "body.md"
+    source.write_text(filled(blank, reason=False), encoding="utf-8")
+    done = text("render", "change/description", "--set-file", f"ChangeBody={source}")
+    report("пункт чеклиста вне набора без причины отклонен", done.returncode == 1 and "Невыполнимо" in done.stderr,
+           done.stderr)
 
 
 def main() -> int:
