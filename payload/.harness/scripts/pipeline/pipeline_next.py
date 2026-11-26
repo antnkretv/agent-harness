@@ -450,7 +450,8 @@ def pending_passes(pull, current: dict, events: list[tuple[str, str, str]]) -> l
     missing = {entry["id"] for entry in entries if entry["id"] not in current}
     files = (forge.change_files(pull.number) or []) if missing else []
     return [entry for entry in entries
-            if entry["id"] in approved and post_approval.stale(approved[entry["id"]], pull.head_sha, pull.fetch_ref)
+            if entry["id"] in approved and post_approval.stale(approved[entry["id"]], pull.head_sha, pull.fetch_ref,
+                                                                     pull.base)
             or entry["id"] not in approved and current.get(entry["id"], {}).get("state") != "approve"
             and not (entry["id"] in missing and review_policy.prose_only(entry, files))]
 

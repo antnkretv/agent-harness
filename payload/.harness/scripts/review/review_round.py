@@ -237,7 +237,7 @@ def compose(number: int, label: str, failed: str) -> dict:
     if not base_sha:
         raise RoundError(msg('runtime_current_base_sha_is_unavailable_review_cannot_be_planned'))
     routes = {item.name: item for item in planner.route(marks, changed, change.head_sha, base_sha, policy, task,
-                                                        change.fetch_ref)}
+                                                        change.fetch_ref, change.base)}
 
     target = verdict.Target(number, change.head_sha, forge.run_url(), base_sha, policy, task)
     if not verdict.trusted_publisher(target):

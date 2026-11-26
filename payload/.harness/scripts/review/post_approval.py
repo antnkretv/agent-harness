@@ -36,11 +36,29 @@ def present(*shas: str) -> bool:
     return all(git("cat-file", "-e", f"{sha}^{{commit}}").returncode == 0 for sha in shas)
 
 
+def pulled(*refs: str) -> None:
+    import os
+    import time
+
+    import forge
+    from review_round import LOW_SPEED, TRIES
+
+    env = forge.git_env({**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    shallow = git("rev-parse", "--is-shallow-repository").stdout.strip() == "true"
+    command = ["git", *(part for key, value in LOW_SPEED for part in ("-c", f"{key}={value}")), "fetch", "--quiet", "--no-tags",
+               *([f"--depth={DEPTH}"] if shallow else []), "origin", *refs]
+    for number in range(1, TRIES + 1):
+        if subprocess.run(command, cwd=ROOT, env=env, capture_output=True, check=False).returncode == 0:
+            return
+        if number < TRIES:
+            time.sleep(number * 5)
+
+
 def fetched(approved: str, head: str, fetch: str) -> bool:
     if present(approved, head):
         return True
     if fetch:
-        git("fetch", "--quiet", "--no-tags", f"--depth={DEPTH}", "origin", fetch)
+        pulled(fetch)
     return present(approved, head)
 
 
@@ -50,9 +68,23 @@ def commits(approved: str, head: str) -> tuple[tuple[str, str], ...]:
         if listed.returncode == 0 else ()
 
 
-def resolved(approved: str, head: str) -> list[str]:
-    merges = git("rev-list", "--first-parent", "--merges", f"{approved}..{head}").stdout.split()
-    return [sha for sha in merges if git("diff-tree", "--cc", "--no-commit-id", sha).stdout.strip()]
+def based(parent: str, branch: str) -> bool:
+    ref = f"refs/remotes/origin/{branch}"
+    if not branch:
+        return False
+    if git("merge-base", "--is-ancestor", parent, ref).returncode == 0:
+        return True
+    pulled(f"+refs/heads/{branch}:{ref}")
+    return git("merge-base", "--is-ancestor", parent, ref).returncode == 0
+
+
+def merges(approved: str, head: str, branch: str) -> tuple[list[str], list[str]]:
+    listed = git("rev-list", "--first-parent", "--merges", "--parents", f"{approved}..{head}").stdout.splitlines()
+    rows = [line.split() for line in listed]
+    foreign = [row[0] for row in rows if not all(based(parent, branch) for parent in row[2:])]
+    manual = [row[0] for row in rows if row[0] not in foreign
+              and git("diff-tree", "--cc", "--no-commit-id", row[0]).stdout.strip()]
+    return foreign, manual
 
 
 def changes(approved: str, head: str) -> tuple[tuple[str, ...], int] | None:
@@ -111,7 +143,7 @@ def built(path: str, rule: dict) -> bool:
 
 
 @functools.cache
-def judge(approved: str, head: str, fetch: str = "") -> Fix:
+def judge(approved: str, head: str, fetch: str = "", branch: str = "") -> Fix:
     rule = policy()
     limit = rule.get("lines", 0)
     unreadable = Fix(False, msg("fix_unreadable", approved[:9], head[:9]))
@@ -123,9 +155,11 @@ def judge(approved: str, head: str, fetch: str = "") -> Fix:
     if found is None:
         return unreadable
     files, lines = found
-    merges = resolved(approved, head)
-    if merges:
-        return Fix(False, msg("fix_merge_resolved", ", ".join(sha[:9] for sha in merges)), files, lines, fixes)
+    foreign, manual = merges(approved, head, branch)
+    if foreign:
+        return Fix(False, msg("fix_merge_foreign", ", ".join(sha[:9] for sha in foreign)), files, lines, fixes)
+    if manual:
+        return Fix(False, msg("fix_merge_resolved", ", ".join(sha[:9] for sha in manual)), files, lines, fixes)
     if lines >= limit:
         return Fix(False, msg("fix_too_large", lines, limit), files, lines, fixes)
     foreign = [path for path in files if not built(path, rule)]
@@ -138,10 +172,10 @@ def judge(approved: str, head: str, fetch: str = "") -> Fix:
     return Fix(True, msg("fix_accepted", lines, limit), files, lines, fixes)
 
 
-def stale(approved: str, head: str, fetch: str = "") -> Fix | None:
+def stale(approved: str, head: str, fetch: str = "", branch: str = "") -> Fix | None:
     if not approved or approved == head:
         return None
-    fix = judge(approved, head, fetch)
+    fix = judge(approved, head, fetch, branch)
     return None if fix.accepted else fix
 
 
@@ -154,7 +188,7 @@ def accepted(number: int) -> tuple[tuple[str, str], ...]:
     if pull is None:
         return ()
     approved = review_policy.covered(pipeline_next.verdicts(pull)[2])
-    fixes = [judge(sha, pull.head_sha, pull.fetch_ref) for sha in set(approved.values()) - {pull.head_sha}]
+    fixes = [judge(sha, pull.head_sha, pull.fetch_ref, pull.base) for sha in set(approved.values()) - {pull.head_sha}]
     if not fixes or not all(fix.accepted for fix in fixes):
         return ()
     return max(fixes, key=lambda fix: len(fix.commits)).commits

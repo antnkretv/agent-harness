@@ -160,11 +160,9 @@ def covered(events: list[tuple[str, str, str]]) -> dict[str, str]:
             fresh.add(name)
         else:
             latest.pop(name, None)
-        if len(latest) < len(names):
-            since = ""
-        elif not since:
+        if not since and len(latest) == len(names):
             since, fresh = sha, set()
-    return {name: latest[name] if name in fresh else since for name in names} if since else {}
+    return {name: sha if name in fresh else since for name, sha in latest.items()} if since else {}
 
 
 def mark_events(marks: list[Mark]) -> list[tuple[str, str, str]]:
@@ -180,12 +178,12 @@ def mark_events(marks: list[Mark]) -> list[tuple[str, str, str]]:
     return found
 
 
-def reopened(approved: str, head: str, fetch: str = "") -> str:
+def reopened(approved: str, head: str, fetch: str = "", branch: str = "") -> str:
     import post_approval
 
     if not approved or approved == head:
         return ""
-    fix = post_approval.judge(approved, head, fetch)
+    fix = post_approval.judge(approved, head, fetch, branch)
     if fix.accepted:
         print(annotation("notice", "plan_fix_accepted", approved[:9], fix.why))
         return ""
@@ -194,7 +192,7 @@ def reopened(approved: str, head: str, fetch: str = "") -> str:
 
 
 def route(marks: list[Mark], changed: list[str], head: str, base: str = "", policy: str = "", task: str = "",
-          fetch: str = "") -> list[Route]:
+          fetch: str = "", branch: str = "") -> list[Route]:
     stall = get("processes.review.stallRounds", 0, file=PIPELINE)
     found = []
     approved = covered(mark_events(marks))
@@ -206,7 +204,7 @@ def route(marks: list[Mark], changed: list[str], head: str, base: str = "", poli
         within = spent < budget
         run, why = within, msg("plan_budget_spent")
         outcome = "pending" if run else "budget-exhausted"
-        since_fix = reopened(approved.get(name, ""), head, fetch) if last == OK else ""
+        since_fix = reopened(approved.get(name, ""), head, fetch, branch) if last == OK else ""
         if since_fix:
             last, since = "", since_fix
         elif last == OK:

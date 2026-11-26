@@ -216,11 +216,12 @@ def git_in(repo: str, *args: str) -> str:
                           capture_output=True, text=True).stdout.strip()
 
 
-def planned(repo: str, rows: list, files: list[str], head: str, log: str | None, fetch: str = "") -> dict:
+def planned(repo: str, rows: list, files: list[str], head: str, log: str | None, fetch: str = "",
+            branch: str = "") -> dict:
     post_approval.ROOT, post_approval.named = repo, lambda *_: log
     post_approval.judge.cache_clear()
     with contextlib.redirect_stdout(io.StringIO()):
-        routes = plan.route([plan.Mark(*row) for row in rows], files, head, fetch=fetch)
+        routes = plan.route([plan.Mark(*row) for row in rows], files, head, fetch=fetch, branch=branch)
     return {item.name: item for item in routes}
 
 
@@ -277,13 +278,32 @@ with tempfile.TemporaryDirectory() as root:
     routes = planned(clone, approved_rows(approved), ["src/App/Foo.cs"], head, named_log, "refs/heads/feature")
     report("план в CI на мелком клоне базы дозагружает коммиты PR и правку принимает", set(), running(routes))
 
-    git_in(origin, "checkout", "-q", "develop")
+    full = os.path.join(root, "full")
+    subprocess.run(["git", "clone", "-q", f"file://{origin}", full], check=True, capture_output=True)
     committed(origin, {"src/App/Other.cs": "".join(f"{n}\n" for n in range(limit))}, "base moved")
     git_in(origin, "checkout", "-q", "feature")
     git_in(origin, "merge", "-q", "--no-edit", "develop")
     merged = git_in(origin, "rev-parse", "HEAD")
-    routes = planned(origin, approved_rows(approved), ["src/App/Foo.cs"], merged, named_log)
+    routes = planned(full, approved_rows(approved), ["src/App/Foo.cs"], merged, named_log, "refs/heads/feature",
+                     "develop")
     report("слияние базы без ручного разрешения в правку не входит", set(), running(routes))
+    report("дозагрузка в полном клоне не делает его мелким", "false",
+           git_in(full, "rev-parse", "--is-shallow-repository"))
+
+    git_in(origin, "checkout", "-q", "-b", "side", base)
+    committed(origin, {"src/App/Evil.cs": "".join(f"{n}\n" for n in range(limit * 10))}, "side")
+    git_in(origin, "checkout", "-q", "feature")
+    git_in(origin, "merge", "-q", "--no-edit", "side")
+    smuggled = git_in(origin, "rev-parse", "HEAD")
+    routes = planned(full, approved_rows(approved), ["src/App/Evil.cs"], smuggled, named_log, "refs/heads/feature",
+                     "develop")
+    report("слияние ветки не из базы после апрува поднимает проходы", everyone, running(routes))
+
+events = [(entry["id"], "approve", "H1") for entry in plan.passes()]
+first, second = plan.passes()[0]["id"], plan.passes()[1]["id"]
+events += [(first, "changes", "H2"), (second, "approve", "H2"), (first, "approve", "H3")]
+report("правки другого прохода не возвращают снятые апрувы", ("H3", "H2", "H1"),
+       tuple(plan.covered(events).get(entry["id"]) for entry in plan.passes()))
 
 log = "\n".join(["== text-registry: check-text-registry.py", "src/App/Bar.cs: unused key",
                  "== pipeline: check-pipeline.py", "error src/App/Foo.cs:3", "",
