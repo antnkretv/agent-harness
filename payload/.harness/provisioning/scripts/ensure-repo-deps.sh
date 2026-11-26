@@ -7,7 +7,7 @@
 #
 #   ensure-repo-deps.sh [--repo <корень>] [--clean] [--steps | --only-steps]
 #
-# --steps: затем шаги проекта .harness/project/setup/session/*.sh по имени; отказ шага код возврата не меняет.
+# --steps: затем шаги проекта - команды списка setup.session манифеста по порядку; отказ шага код возврата не меняет.
 # --only-steps: только шаги проекта, без установок; отказ шага дает код 1. Так шаги зовет хук
 # старта сессии, чтобы показать отказ шага в сессии.
 # --clean: npm ci по lock-файлу вместо npm install. Для разовой сборки снапшота
@@ -51,11 +51,7 @@ if [ -r "$lib" ]; then
   solution="$(manifest_get '.modules.backend.extensions.dotnet.solution' '')"
   apps="$(manifest_list '.apps[].path' '')"
   if [ -d .githooks ] && manifest_installed githooks; then hooks="on"; else hooks="off"; fi
-fi
-if [ "$STEPS" != 0 ]; then
-  for step in .harness/project/setup/session/*.sh; do
-    [ -f "$step" ] && steps+="$step"$'\n'
-  done
+  [ "$STEPS" = 0 ] || steps="$(manifest_list '.setup.session' '')"
 fi
 
 # shellcheck source=./toolchain-env.sh
@@ -66,7 +62,7 @@ run_steps() {
   while IFS= read -r step; do
     [ -n "$step" ] || continue
     say @repo_deps_step "$step"
-    bash "$REPO/$step" </dev/null || { warn @repo_deps_step_failed "$step"; failed=1; }
+    bash -c "$step" </dev/null || { warn @repo_deps_step_failed "$step"; failed=1; }
   done <<<"$steps"
   return "$failed"
 }

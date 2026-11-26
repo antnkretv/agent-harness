@@ -4,7 +4,7 @@
     "Формат - PARAMETERS.md, сопровождение - MAINTAINING.md."
   ],
   "name": "agent-harness",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "repository": "https://github.com/antnkretv/agent-harness",
   "released": [
     ".vale/styles/config/views/CSharpMessages.yml",
@@ -1094,7 +1094,7 @@
     ".cursor/environment.json": {
       "module": "agents/cursor",
       "role": "managed",
-      "extend": ".harness/project/setup/snapshot/*.sh и .harness/project/setup/session/*.sh",
+      "extend": "setup.snapshot и setup.session в .harness/project/manifest.json",
       "place": "shell"
     },
     ".cursor/hooks.json": {
@@ -1413,7 +1413,7 @@
     ".harness/hooks/session-start.sh": {
       "module": "core",
       "role": "managed",
-      "extend": ".harness/project/setup/session/*.sh"
+      "extend": "setup.session в .harness/project/manifest.json"
     },
     ".harness/lib/forge.py": {
       "module": "core",
@@ -1865,7 +1865,7 @@
     ".harness/provisioning/scripts/cloud-setup.sh": {
       "module": "core",
       "role": "managed",
-      "extend": ".harness/project/setup/snapshot/*.sh",
+      "extend": "setup.snapshot в .harness/project/manifest.json",
       "executable": true
     },
     ".harness/provisioning/scripts/ensure-agent-cli.sh": {

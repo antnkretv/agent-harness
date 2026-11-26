@@ -32,6 +32,8 @@ from .resources import (
     PROJECT,
     Refusal,
     SERVICE_AREAS,
+    SETUP,
+    SETUP_PHASES,
     build_of,
     git,
     index_modes,
@@ -42,6 +44,7 @@ from .resources import (
     read_lock,
     repository,
     say,
+    setup_wrappers,
     tracks_modes,
 )
 from .state import Installer, version_tuple
@@ -73,6 +76,12 @@ def manifest_synced(root: Path) -> list[Finding]:
     if not (root / ANSWERS).is_file() or not manifest_stale(root, read_answers(root)):
         return []
     return [Finding("error", msg("verify_manifest_stale", PROJECT, ANSWERS, INSTALLER))]
+
+
+def setup_left(root: Path) -> list[Finding]:
+    lists = ", ".join(f"{SETUP}.{phase}" for phase in SETUP_PHASES)
+    return [Finding("error", msg("verify_setup_wrapper", path.relative_to(root).as_posix(), lists, PROJECT))
+            for path in setup_wrappers(root)]
 
 
 def integrity(root: Path, lock: dict) -> list[Finding]:
@@ -463,6 +472,7 @@ def verify(args: argparse.Namespace) -> int:
     catalog = load_catalog()
     findings = [Finding("error", line) for line in validate(project, root, catalog)]
     findings += manifest_synced(root)
+    findings += setup_left(root)
     if manifest_moved(root, lock):
         findings.append(Finding("error", msg("verify_manifest_moved", PROJECT, LOCK, INSTALLER)))
     findings += undeclared(root, project, catalog)

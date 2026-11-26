@@ -18,10 +18,12 @@ say @web_setup_repo "$REPO_ROOT"
 
 scripts=.harness/provisioning/scripts
 solution=""
+steps=""
 if [ -r .harness/lib/manifest.sh ]; then
   # shellcheck source=../../lib/manifest.sh
   . .harness/lib/manifest.sh
   solution="$(manifest_get '.modules.backend.extensions.dotnet.solution' '')"
+  steps="$(manifest_list '.setup.snapshot' '')"
 fi
 
 failed=0
@@ -57,11 +59,11 @@ fi
 
 "$scripts/ensure-toolchain-profile.sh" || { say_err @check_failed ensure-toolchain-profile.sh; failed=1; }
 
-for step in .harness/project/setup/snapshot/*.sh; do
-  [ -f "$step" ] || continue
+while IFS= read -r step; do
+  [ -n "$step" ] || continue
   say @web_setup_step "$step"
-  bash "$step" </dev/null || { say_err @check_failed "$step"; failed=1; }
-done
+  bash -c "$step" </dev/null || { say_err @check_failed "$step"; failed=1; }
+done <<<"$steps"
 
 if [ -x "$scripts/ensure-docker-mcp.sh" ] && have docker; then
   say @web_setup_docker_mcp

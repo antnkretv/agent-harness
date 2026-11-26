@@ -74,6 +74,7 @@ from .resources import (
     NONE,
     OFF,
     ON,
+    OWN_SECTIONS,
     PROJECT,
     PROJECT_NAME,
     Refusal,
@@ -109,10 +110,10 @@ def configured(s: Session) -> dict:
     agents = agent_entries(s)
     if s.decisions:
         return {"modules": modules, "agents": agents}
-    rules = s.value("rules", object_parser, {})
+    own = {key: s.value(key, object_parser, {}) for key in OWN_SECTIONS}
     return {"_": [msg("project_note_1"), msg("project_note_2")], **identity,
             "docs": docs_entries(s, modules), "agents": agents, "apps": app_entries(s, modules), "modules": modules,
-            **({"rules": rules} if rules else {})}
+            **{key: value for key, value in own.items() if value}}
 
 
 def agent_entries(s: Session) -> dict:
@@ -454,8 +455,7 @@ def answers_from(project: dict, catalog: dict) -> dict:
         found["docs.vendoredSkills"] = own_skills(found["docs.vendoredSkills"], shipped_skills(catalog))
     if changed := {key: value for key, value in docs.items() if key not in DOCS_ASKED and DOCS.get(key) != value}:
         found["docs"] = changed
-    if isinstance(project.get("rules"), dict) and project["rules"]:
-        found["rules"] = project["rules"]
+    found.update({key: project[key] for key in OWN_SECTIONS if isinstance(project.get(key), dict) and project[key]})
     for name, spec in catalog["modules"].items():
         entry = modules.get(name)
         if entry is None:
@@ -488,7 +488,7 @@ def known_id(key: str, catalog: dict) -> None:
     parts = key.split(".")
     if len(parts) == 2 and parts[0] == "agents" and parts[1] in catalog["agents"]:
         return
-    if key in ("shape", "apps", "docs", "rules", *SUMMARIES) or key in IDENTITY or key.removeprefix("docs.") in DOCS_ASKED:
+    if key in ("shape", "apps", "docs", *OWN_SECTIONS, *SUMMARIES) or key in IDENTITY or key.removeprefix("docs.") in DOCS_ASKED:
         return
     if parts[0] == "apps" and len(parts) == 3 and NAME.match(parts[1]) and parts[2] in APP_FIELDS:
         return
