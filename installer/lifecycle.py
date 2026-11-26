@@ -96,9 +96,13 @@ def upgraded(args: argparse.Namespace, root: Path, installed: dict, archive: Pat
             return 0
     listed = run(["git", "status", "--porcelain", "-z", "--no-renames", "--untracked-files=all"], work).stdout
     changed = [line[3:] for line in listed.split("\0") if line[1:2] not in ("", " ")]
+    shell = set(read_lock(work).get("files", {}))
+    hidden = sorted(path for path in shell - set(git(work, "ls-files", "-z").split("\0")) if (work / path).is_file())
     title = msg("upgrade_title", version)
     if changed:
         git(work, "add", "--", *changed)
+    if hidden:
+        git(work, "add", "-f", "--", *hidden)
     if git(work, "diff", "--cached", "--name-only"):
         run(new + ["verify", "--target", str(work), "--no-gates"], work, show=True)
         git(work, "commit", "-q", "-m", title)

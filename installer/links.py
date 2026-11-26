@@ -4,7 +4,8 @@ import posixpath
 import re
 from collections.abc import Callable
 
-LINK = re.compile(r"(\(?)\[([^\]\n]+)\]\(([^)\s#]*)(#[^)\s]*)?\)(\)?)")
+LINK = re.compile(r"(\(?)(?<!!)\[([^\]\n]+)\]\(([^)\s#]*)(#[^)\s]*)?\)(\)?)")
+SPAN = re.compile(r"(`+)(?!`).*?(?<!`)\1(?!`)")
 FENCE = re.compile(r"^[ \t]*(```|~~~)")
 SKILL = re.compile(r"\.agents/skills/([^/]+)/SKILL\.md")
 CODE = re.compile(r"`([^`]+)`")
@@ -29,6 +30,14 @@ def prose_lines(text: str):
             yield number, line
 
 
+def code_spans(line: str) -> list[tuple[int, int]]:
+    return [match.span() for match in SPAN.finditer(line) if "](" in match.group(0)]
+
+
+def in_code(spans: list[tuple[int, int]], position: int) -> bool:
+    return any(start <= position < stop for start, stop in spans)
+
+
 def folders(paths: set[str]) -> set[str]:
     return {path.rsplit("/", depth)[0] for path in paths for depth in range(1, path.count("/") + 1)}
 
@@ -45,7 +54,10 @@ def allowed(source: str, target: str) -> bool:
 def installed_links(source: str, text: str, installed: Callable[[str], bool]) -> list[tuple[int, str]]:
     found = []
     for number, line in prose_lines(text):
+        code = code_spans(line)
         for match in LINK.finditer(line):
+            if in_code(code, match.start(2)):
+                continue
             target = target_of(source, match.group(3))
             if target and not allowed(source, target) and installed(target):
                 found.append((number, target))
@@ -85,7 +97,11 @@ def unlinked(source: str, text: str, resolve: Callable[[str, str], str | None],
              gates: dict[str, str]) -> tuple[str, list[tuple[int, str, str]]]:
     lines, changes = text.split("\n"), []
     for number, line in prose_lines(text):
+        code = code_spans(line)
+
         def replace(match: re.Match[str]) -> str:
+            if in_code(code, match.start(2)):
+                return match.group(0)
             target = target_of(source, match.group(3))
             kept = None if target is None or allowed(source, target) else resolve(target, (match.group(4) or "")[1:])
             if kept is None:

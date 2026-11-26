@@ -36,4 +36,4 @@
 
 ## Машиночитаемая карта
 
-Исполняемый экземпляр - [`.harness/project/area-map.json`](../../../.harness/project/area-map.json), разбор - `.harness/scripts/check/areas.py`. Корневые документы попадают в область `docs` **точными путями**, а не маской `*.md`.
+Исполняемый экземпляр - [`.harness/project/area-map.json`](../../../.harness/project/area-map.json), ее читают гейты комплекта. Корневые документы попадают в область `docs` **точными путями**, а не маской `*.md`.

@@ -19,7 +19,7 @@
 | `docs/features/<feature>/` | устройство feature |
 | раздел продукта проекта, если он есть | продукт и рынок |
 | `docs/platform/adr/<area>/` | принятое решение и его причины |
-| [`docs/platform/adr/README.md`](../adr/README.md) | реестр и жизненный цикл ADR |
+| [`docs/platform/adr/README.md`](../adr/README.md) | реестр ADR проекта; нумерация и жизненный цикл - `.harness/docs/adr.md` |
 | `specs/<track>/` | активное требование и plan |
 | [`specs/README.md`](../../../specs/README.md) | статусы SDD |
 | `.specify/memory/constitution.md` | принципы проекта |

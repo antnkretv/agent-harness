@@ -32,7 +32,7 @@ SPLIT = {
 }
 ENTRY_LINES = {"AGENTS.md": (".harness/AGENTS.md",), "CLAUDE.md": ("@.harness/AGENTS.md", "@.harness/CLAUDE.md")}
 HEADING = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$")
-EMPHASIS = re.compile(r"[*_]")
+EMPHASIS = re.compile(r"\*")
 
 
 def slug(title: str) -> str:
@@ -95,8 +95,11 @@ def project_links(source: str, text: str, resolve: Callable[[str, str], str | No
     if repository:
         address = re.escape(repository.removesuffix(".git")) + r"/blob/[^/)\s>]+/payload/([^)\s#>]+)"
         up = "/".join([".."] * source.count("/") + [""])
-        text = re.sub(r"(?<=\]\()" + address, lambda match: up + match.group(1), text)
-        text = re.sub(r"<" + address + r"(#[^>\s]*)?>", lambda match: f"`{LEGACY_DOCS.get(match.group(1), match.group(1))}`", text)
+        def known(path: str) -> bool:
+            return resolve(path, "") is not None
+        text = re.sub(r"(?<=\]\()" + address, lambda match: up + match.group(1) if known(match.group(1)) else match.group(0), text)
+        text = re.sub(r"<" + address + r"(#[^>\s]*)?>", lambda match: f"`{LEGACY_DOCS.get(match.group(1), match.group(1))}`"
+                      if known(match.group(1)) else match.group(0), text)
     text, _ = unlinked(source, text, resolve, gates)
     changes = [(number, old.strip(), new.strip()) for number, (old, new) in
                enumerate(zip(before.split("\n"), text.split("\n")), 1) if old != new]
@@ -117,14 +120,16 @@ def relinked(root: Path, planned: list) -> list[tuple[str, int, str, str]]:
     installed = installed_test(tracked, {item.path for item in planned if item.place == "lock"})
 
     def read(path: str) -> str | None:
-        target = root / path
-        return target.read_text(encoding="utf-8", errors="replace") if target.is_file() else None
+        try:
+            return (root / path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return None
 
     resolve = resolver(read, installed)
     gates = gates_of(json.loads(read(METHODOLOGY) or "{}"))
     repository = json.loads(read(LOCK) or "{}").get("kit", {}).get("repository", "")
     rewritten = []
-    for path in sorted(path for path in tracked if path.endswith(".md") and (root / path).is_file()):
+    for path in sorted(path for path in tracked if path.endswith(".md") and read(path) is not None):
         text, changes = project_links(path, read(path), resolve, gates, repository)
         if changes:
             (root / path).write_text(text, encoding="utf-8", newline="")

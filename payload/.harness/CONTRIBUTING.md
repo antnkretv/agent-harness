@@ -157,7 +157,7 @@ PR, открытого вне конвейера, записывает `git conf
   выбранной композиции печатает `pipeline-run.py plan <имя>`.
 
 Критерии code review задает [`.harness/REVIEW.md`](REVIEW.md), устройство CI и кругов ревью -
-[`docs/platform/delivery/ci-cd.md`](docs/ci-cd.md). Исполняемый состав проверок находится в
+[`.harness/docs/ci-cd.md`](docs/ci-cd.md). Исполняемый состав проверок находится в
 workflow, `.harness/methodology.json`, композициях `.harness/pipelines.json` и конфигурации
 затронутой области.
 
@@ -191,7 +191,7 @@ Git-хуки - модуль `githooks` harness, каждый хук - его р�
 {{/if}}{{#if module:githooks}}- `--no-verify` допустим только по явной причине; CI остается обязательным.
 
 Реализация находится в [`.githooks/`](../.githooks), разбор проверок - в
-[`docs/platform/delivery/ci-cd.md`](docs/ci-cd.md).
+[`.harness/docs/ci-cd.md`](docs/ci-cd.md).
 
 {{/if}}## 6. Профили областей
 
