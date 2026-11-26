@@ -338,7 +338,9 @@ def manner() -> str:
 
 
 def command_form(args: argparse.Namespace) -> int:
-    entry = variables().get(args.name, {})
+    entry = variables().get(args.name)
+    if entry is None:
+        raise ValueError(msg("template_form_undeclared", args.name))
     if not entry.get("prompt"):
         raise ValueError(msg("template_form_unknown", args.name))
     emit(args.out, text_forms.skeleton(entry["form"]) if entry.get("form") else "")
