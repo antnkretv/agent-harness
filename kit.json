@@ -4,7 +4,7 @@
     "Формат - PARAMETERS.md, сопровождение - MAINTAINING.md."
   ],
   "name": "agent-harness",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "repository": "https://github.com/antnkretv/agent-harness",
   "released": [
     ".vale/styles/config/views/CSharpMessages.yml",
