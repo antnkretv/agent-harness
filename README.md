@@ -40,8 +40,8 @@ python3 .harness/ah.py upgrade [--version <версия>]   # ветка, нов
 ## Выпуск
 
 ```bash
-git switch master && git merge --no-ff origin/develop    # version в kit.json поднята в develop
-git tag v<версия> && git push origin master v<версия>    # workflow release.yml публикует архив и sha256
+git switch master && git merge --ff-only origin/develop   # version в kit.json поднята в develop
+git push origin master                                    # release.yml ставит тег v<версия>, публикует архив и sha256
 ```
 
 ## Подробнее
