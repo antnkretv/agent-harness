@@ -253,7 +253,7 @@ tar -xzf <каталог>/agent-harness-<версия>.tar.gz -C <каталог
 `global.json` фикстуры `tools/fixtures/dotnet/src` `kit.py check --adapters` ставит сам скриптом
 поставки `ensure-dotnet-sdk.sh`, как в CI, если подходящего SDK нет ни в одном корне, который
 проверяет скрипт. Сценарии smoke получают корень из его вывода `DOTNET_ROOT=`. Для установки нужны
-хосты загрузки из [окружения агента](payload/docs/platform/agents/environment.md).
+хосты из [списка разрешенных хостов окружения](payload/docs/platform/agents/environment.md#setup-script-и-хук-старта-в-claude-code-web).
 
 Архив собирает workflow проверки комплекта `.github/workflows/check.yml` и выкладывает его артефактом
 прогона `agent-harness`: архив PR скачивается со страницы прогона.

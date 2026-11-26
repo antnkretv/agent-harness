@@ -894,7 +894,11 @@ def dotnet_sdk() -> list[str]:
         return [msg("kit_smoke_dotnet_sdk", done.returncode)]
     root = [line.partition("=")[2] for line in done.stdout.splitlines() if line.startswith("DOTNET_ROOT=")][-1]
     if os.name == "nt":
-        root = run(["bash", "-c", 'cygpath -w "$0"', root], KIT).stdout.strip()
+        native = run(["bash", "-c", 'cygpath -w "$0"', root], KIT)
+        if native.returncode != 0 or not native.stdout.strip():
+            print(native.stdout + native.stderr, flush=True)
+            return [msg("kit_smoke_dotnet_sdk", native.returncode)]
+        root = native.stdout.strip()
     ENV.update(DOTNET_ROOT=root, PATH=os.pathsep.join([root, ENV.get("PATH", "")]))
     return []
 
