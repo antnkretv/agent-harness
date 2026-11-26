@@ -102,6 +102,18 @@ def git(root: Path, *args: str, check: bool = True, input: str | None = None) ->
     return done.stdout.strip()
 
 
+def hidden(root: Path, paths) -> list[tuple[str, str, str, str]]:
+    tracked = set(git(root, "ls-files", "-z").split("\0"))
+    wanted = [path for path in paths if path not in tracked and (root / path).is_file()]
+    if not wanted:
+        return []
+    done = subprocess.run(["git", "check-ignore", "--verbose", "--stdin", "-z"], cwd=root,
+                          input="".join(path + "\0" for path in wanted).encode("utf-8"), capture_output=True)
+    fields = done.stdout.decode("utf-8").split("\0")
+    records = [fields[start:start + 4] for start in range(0, len(fields) - 3, 4)]
+    return sorted((path, pattern, source, number) for source, number, pattern, path in records if pattern == "/" + path)
+
+
 def tracks_modes(root: Path) -> bool:
     return POSIX_MODES and git(root, "config", "--bool", "core.fileMode", check=False) != "false"
 

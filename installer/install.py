@@ -86,7 +86,7 @@ def _apply(args: argparse.Namespace, root: Path) -> int:
     tree = kit_tree()
     if args.archive:
         _, shipped, packed = archive_build(Path(args.archive).resolve())
-        if tree and packed != tree or shipped.get("version") != kit.get("version"):
+        if packed != tree or shipped.get("version") != kit.get("version"):
             raise Refusal(msg("apply_archive_other", args.archive, kit_dir))
         tree = packed
     elif not tree:

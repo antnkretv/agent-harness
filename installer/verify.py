@@ -35,6 +35,7 @@ from .resources import (
     SETUP,
     SETUP_PHASES,
     git,
+    hidden,
     index_modes,
     kit_tree,
     layer_manifest,
@@ -98,16 +99,8 @@ def integrity(root: Path, lock: dict) -> list[Finding]:
     for source, number, pattern, path in sorted(records, key=lambda record: record[3]):
         if not pattern.startswith("!") and Path(source).name == ".gitignore" and not Path(source).is_absolute():
             found.append(Finding("error", msg("verify_ignored", path, pattern, source, number)))
-    tracked = index_modes(root)
-    hidden = [path for path, entry in lock.get("files", {}).items() if path not in tracked and (root / path).is_file()]
-    if hidden:
-        done = subprocess.run(["git", "check-ignore", "--verbose", "--stdin", "-z"], cwd=root,
-                              input="".join(path + "\0" for path in hidden).encode("utf-8"), capture_output=True)
-        fields = done.stdout.decode("utf-8").split("\0")
-        for source, number, pattern, path in sorted((fields[start:start + 4] for start in range(0, len(fields) - 3, 4)),
-                                                    key=lambda record: record[3]):
-            if pattern == "/" + path:
-                found.append(Finding("error", msg("verify_hidden", path, pattern, source, number)))
+    found += [Finding("error", msg("verify_hidden", path, pattern, source, number))
+              for path, pattern, source, number in hidden(root, lock.get("files", {}))]
     return found
 
 

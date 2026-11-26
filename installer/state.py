@@ -186,8 +186,8 @@ class Installer:
         content = seeded(item.path, template).encode("utf-8") if markers(item.path, PROJECT_BLOCK)[0] in template \
             else item.content
         entry = {"role": "seed", "module": item.module, "edition": sha256(content)}
-        if target.exists() and previous.get("role") == "block":
-            text = converted(item.path, target.read_text(encoding="utf-8"), template)
+        if target.exists() and previous.get("role") == "block" and markers(item.path, "core")[0] in target.read_text(encoding="utf-8"):
+            text = converted(item.path, target.read_text(encoding="utf-8", newline=""), template)
             self.write(item.path, text.encode("utf-8"), item.executable)
             self.report.append((item.path, msg("state_seed_converted")))
         elif target.exists() and not previous and unwired(item.path, target.read_text(encoding="utf-8", errors="replace")):

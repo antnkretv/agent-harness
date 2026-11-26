@@ -68,7 +68,9 @@ def seeded(path: str, template: str) -> str:
 def converted(path: str, current: str, template: str) -> str:
     found = layout(path, current, "core")
     title, preamble, _ = seed_parts(path, template)
-    own = [found.mine] + [part.strip() for part in found.outside if part.strip()]
+    given = {line for line in preamble.split("\n") if line.startswith("@")}
+    own = ["\n".join(line for line in part.split("\n") if line not in given).strip()
+           for part in [found.mine] + [part.strip() for part in found.outside if part.strip()]]
     parts = [found.title or title, preamble, *[part for part in own if part]]
     return "\n\n".join(part for part in parts if part) + "\n"
 
@@ -121,7 +123,8 @@ def relinked(root: Path, planned: list) -> list[tuple[str, int, str, str]]:
 
     def read(path: str) -> str | None:
         try:
-            return (root / path).read_text(encoding="utf-8")
+            with open(root / path, encoding="utf-8", newline="") as handle:
+                return handle.read()
         except (OSError, UnicodeDecodeError):
             return None
 

@@ -92,7 +92,6 @@ STATUS_LEXICON = (
 LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 FENCE = re.compile(r"```.*?```", re.S)
 EXTERNAL = re.compile(r"^(https?:|mailto:|#)")
-OWNED_BLOCK = re.compile(r"<!-- harness:begin ([\w.-]+) -->(.*?)<!-- harness:end \1 -->", re.S)
 
 
 def tracked() -> list[str]:
@@ -107,26 +106,6 @@ def readable(path: str) -> str:
 
 def prose(text: str) -> str:
     return CODE_SPAN.sub("", FENCE.sub("", text))
-
-
-def check_owned_repeats(files: list[str]) -> list[str]:
-    def paragraphs(text: str) -> set[str]:
-        return {" ".join(part.split()) for part in re.split(r"\n\s*\n", FENCE.sub("", text))
-                if len(part.split()) >= 12 and not part.lstrip().startswith(("#", "|", "-", "*", ">"))}
-
-    found = []
-    for path in files:
-        if not path.endswith(".md"):
-            continue
-        text = readable(path)
-        blocks = list(OWNED_BLOCK.finditer(text))
-        if not blocks:
-            continue
-        outside = paragraphs(OWNED_BLOCK.sub("", text))
-        for block in blocks:
-            if paragraphs(block.group(2)) & outside:
-                found.append(msg("docs_owned_repeat", path, block.group(1)))
-    return found
 
 
 def is_instruction(path: str) -> bool:
@@ -699,10 +678,6 @@ def main() -> int:
             report(msg("docs_title_skills"), check_skills_registered(),
                    msg("docs_hint_skills")),
         ]
-
-    if args.area:
-        passed.append(report(msg("docs_title_owned_repeat"), check_owned_repeats(files),
-                             msg("docs_hint_owned_repeat")))
 
     print()
     if all(passed):

@@ -71,11 +71,11 @@ def names(label: str, path: str) -> bool:
     return text in (path, base, stem) or path.endswith("/" + text) or text.endswith(("/" + base, "/" + stem))
 
 
-def mention(label: str, path: str, gates: dict[str, str], line: str, wrapped: bool) -> str:
+def mention(label: str, path: str, gates: dict[str, str], before: str, wrapped: bool) -> str:
     gate, skill = gates.get(path), SKILL.fullmatch(path)
     if gate:
         name = f"`{gate}`"
-        if name in line.replace(label, ""):
+        if wrapped and names(label, path) and before.rstrip().endswith(name):
             return ""
         said = f"гейт {name}"
     else:
@@ -107,7 +107,7 @@ def unlinked(source: str, text: str, resolve: Callable[[str, str], str | None],
             if kept is None:
                 return match.group(0)
             opened, closed = match.group(1), match.group(5)
-            said = mention(match.group(2), kept, gates, line, bool(opened and closed))
+            said = mention(match.group(2), kept, gates, line[:match.start()], bool(opened and closed))
             if not said:
                 return GONE if bool(opened) == bool(closed) else opened + closed
             return opened + said + closed

@@ -359,6 +359,11 @@ class Smoke:
                    and "`.harness/docs/harness.md`" in converted and "гейт `docs-structure`" in converted)
         ignored = run(["git", "check-ignore", "-q", "--", standard], self.repo).returncode == 0
         self.check(msg("smoke_legacy_adopted"), not ignored and self.read(standard) == (self.installed / "payload" / standard).read_text(encoding="utf-8"))
+        lock = self.read_json(LOCK)
+        lock["files"]["AGENTS.md"] = {"role": "block", "block": "core", "module": "core", "sha256": "0" * 64}
+        self.write_json(LOCK, lock)
+        self.expect(msg("smoke_apply_again"), self.apply())
+        self.check(msg("smoke_legacy_again"), self.read("AGENTS.md") == converted)
         self.commit("chore: smoke-legacy-converted")
         self.expect(msg("smoke_legacy_verify"), self.harness("verify", "--no-gates"))
         self.expect(msg("smoke_apply_again"), self.apply())
