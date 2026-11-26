@@ -104,8 +104,9 @@ def applies(item: str, chosen: set[str]) -> bool:
 
 def picked(title: str, rule: str, form: str, given: str, chosen: set[str]) -> list[str]:
     tail = rf"(?:{re.escape(UNMET)} +(\S[\s\S]*))?" if rule == "pick: all" else ""
-    wanted = [WHEN.sub("", item) for item in items(form) if applies(item, chosen)]
-    last, marks, answered, problems = -1, 0, set(), []
+    listed = [item for item in items(form) if tail or applies(item, chosen)]
+    wanted = [WHEN.sub("", item) for item in listed]
+    last, marks, seen, problems = -1, 0, set(), []
     choices = [item_pattern(item, tail) for item in wanted]
     for item in items(given):
         index, found = next(((index, found) for index in range(last + 1, len(choices))
@@ -116,19 +117,20 @@ def picked(title: str, rule: str, form: str, given: str, chosen: set[str]) -> li
         slots, checked = found.groups(), item.startswith(CHECKED)
         if tail:
             slots, reason = slots[:-1], slots[-1]
-            if checked != (reason is not None):
-                answered.add(index)
+            if checked == (reason is not None):
+                problems.append(msg("template_form_check", title, UNMET, wanted[index].splitlines()[0]))
         if not filled(slots):
             problems.append(msg("template_form_fill", title))
         marks += checked
         last = index
+        seen.add(index)
         if checked and not tail:
             chosen.add(item[len(CHECKED):].split()[0])
     if rule == "pick: some" and not marks:
         problems.append(msg("template_form_pick_some", title))
     if tail:
-        problems += [msg("template_form_check", title, UNMET, want.splitlines()[0])
-                     for index, want in enumerate(wanted) if index not in answered]
+        problems += [msg("template_form_check", title, UNMET, wanted[index].splitlines()[0])
+                     for index, item in enumerate(listed) if index not in seen and applies(item, chosen)]
     return problems
 
 

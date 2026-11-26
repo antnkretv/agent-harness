@@ -338,10 +338,10 @@ def manner() -> str:
 
 
 def command_form(args: argparse.Namespace) -> int:
-    spec = variables().get(args.name, {}).get("form")
-    if not spec:
+    entry = variables().get(args.name, {})
+    if not entry.get("prompt"):
         raise ValueError(msg("template_form_unknown", args.name))
-    emit(args.out, text_forms.skeleton(spec))
+    emit(args.out, text_forms.skeleton(entry["form"]) if entry.get("form") else "")
     print(requirement_text(args.name) + "\n" + manner(), file=sys.stderr)
     return 0
 
@@ -509,7 +509,7 @@ def main() -> int:
     show = commands.add_parser("show")
     show.add_argument("template")
     show.set_defaults(run=command_show)
-    blank = commands.add_parser("form", help="заготовка формы площадки для переменной с полем form: форма по пути включенного расширения, первой строкой ее sha; требование к переменной и правила языка - в stderr")
+    blank = commands.add_parser("form", help="заготовка текста агента: у переменной с полем form - форма по пути включенного расширения, первой строкой ее sha, у остальной - пустая; требование к переменной и правила языка - в stderr")
     blank.add_argument("name", metavar="ИМЯ")
     blank.add_argument("--out", help="файл для заготовки; без него она печатается")
     blank.set_defaults(run=command_form)
