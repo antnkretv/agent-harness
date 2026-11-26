@@ -223,6 +223,11 @@ payload/.harness/hooks/python.cmd tools/kit.py check --adapters      # то же
 payload/.harness/hooks/python.cmd tools/kit.py check --no-smoke      # без smoke: состав, следы, комментарии, воспроизводимость
 ```
 
+Smoke со сторонами и адаптерами нужны Vale, ShellCheck, gitleaks и SDK .NET по `global.json` фикстуры.
+Их ставит `tools/smoke-tools.sh`: в CI его зовет шаг `Smoke tools` проверки и выпуска, в сессии Claude Code
+в этом репозитории - SessionStart hook `.claude/hooks/session-start.sh`. Другой агент или машина
+разработчика ставят их той же командой: `eval "$(bash tools/smoke-tools.sh)"`.
+
 Правка промпта ревью, шаблона текста или правила публикуемого текста в `payload` сверяется пробами
 промптов: обе версии, до и после правки, собирают свой комплект своим `kit.py`, ставят его в пустой
 пробный проект без стека и гоняют на нем одну задачу фикстуры. Пробы ревью и описания изменения зовут

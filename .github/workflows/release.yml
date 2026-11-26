@@ -42,13 +42,7 @@ jobs:
           node-version-file: tools/fixtures/node/.node-version
       - name: Smoke tools
         if: steps.version.outputs.skip != 'true'
-        run: |
-          bash payload/.harness/provisioning/scripts/ensure-vale.sh
-          bash payload/.harness/provisioning/scripts/ensure-shellcheck.sh
-          bash payload/.harness/provisioning/scripts/ensure-dotnet-sdk.sh --repo tools/fixtures/dotnet/src --no-runtimes
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          echo "$HOME/.dotnet" >> "$GITHUB_PATH"
-          echo "DOTNET_ROOT=$HOME/.dotnet" >> "$GITHUB_ENV"
+        run: bash tools/smoke-tools.sh --github
       - name: Kit check
         if: steps.version.outputs.skip != 'true'
         run: python3 tools/kit.py check --adapters
