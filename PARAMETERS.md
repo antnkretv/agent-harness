@@ -13,7 +13,7 @@
 и коды установщика.
 
 Места расширений проекта, которые `apply` после создания не пишет, - `.harness/project/` (манифест,
-ответы, карта областей, сообщения, гейты `rules.own`, шаги `setup/`), заготовки `project-check.yml` и
+ответы, карта областей, сообщения, гейты `rules.own`, шаги подготовки окружения `setup` манифеста), заготовки `project-check.yml` и
 `project-deploy.yml` и настройки машины `.harness/settings.env`: перечень и порядок чтения -
 [расширения проекта](payload/docs/platform/agents/harness.md#расширения-проекта) и
 [настройки окружения](payload/docs/platform/agents/harness-parameters.md#настройки-окружения). Перечень

@@ -15,8 +15,11 @@ from .resources import (
     HERE,
     KNOWN_STACKS,
     NAME,
+    OWN_SECTIONS,
     PROJECT_NAME,
     SERVICE_AREAS,
+    SETUP,
+    SETUP_PHASES,
     SIDES,
     STACKS_WITH_ADAPTER,
     app_roles,
@@ -351,7 +354,7 @@ def windows_paths(node, where: str) -> list[str]:
 
 
 def validate(project: dict, root: Path, catalog: dict) -> list[str]:
-    problems = [line for key in ("docs", "modules", "apps") for line in windows_paths(project.get(key), key)]
+    problems = [line for key in ("docs", "modules", "apps", SETUP) for line in windows_paths(project.get(key), key)]
 
     def need(path: str, pattern: str = r".+") -> str:
         found = lookup(project, path)
@@ -426,13 +429,18 @@ def validate(project: dict, root: Path, catalog: dict) -> list[str]:
             isinstance(rules.get(key, []), list) and all(isinstance(entry, dict) for entry in rules.get(key, []))
             for key in ("disabled", "own")):
         problems.append(msg("param_rules_shape"))
+    setup = project.get(SETUP, {})
+    if not isinstance(setup, dict) or set(setup) - set(SETUP_PHASES) or not all(
+            isinstance(commands, list) and all(isinstance(command, str) and command.strip() and "\n" not in command for command in commands)
+            for commands in setup.values()):
+        problems.append(msg("param_setup_shape", SETUP, ", ".join(SETUP_PHASES)))
     named = project.get("project") if isinstance(project.get("project"), dict) else {}
     problems += [msg("param_section_unknown", f"project.{key}", "name, gitConfigPrefix")
                  for key in sorted(set(named) - {"name", "gitConfigPrefix"})]
     return problems
 
 
-SECTIONS = ("_", "project", "git", "docs", "agents", "apps", "modules", "rules")
+SECTIONS = ("_", "project", "git", "docs", "agents", "apps", "modules", *OWN_SECTIONS)
 def off_texts(catalog: dict, project: dict, path: str) -> tuple[str, str]:
     name, _, extension = path.partition("/")
     if name == "stack":

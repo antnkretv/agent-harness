@@ -2,7 +2,7 @@
 
 | Файл | Что объявляет |
 | --- | --- |
-| [project/](project/manifest.json) | Расширения проекта, которые `apply` после создания не пишет: манифест `manifest.json` (идентичность и ветки, пути документации, приложения, модули harness и их настройки, [справочник](../docs/platform/agents/harness-parameters.md)), ответы настройки `answers.json`, карта областей `area-map.json`, сообщения `messages.env`, гейты `checks/` и шаги `setup/` ([расширения проекта](../docs/platform/agents/harness.md#расширения-проекта)) |
+| [project/](project/manifest.json) | Расширения проекта, которые `apply` после создания не пишет: манифест `manifest.json` (идентичность и ветки, пути документации, приложения, модули harness и их настройки, [справочник](../docs/platform/agents/harness-parameters.md)), ответы настройки `answers.json`, карта областей `area-map.json`, сообщения `messages.env`, гейты `checks/` и шаги подготовки окружения - списки `setup` манифеста ([расширения проекта](../docs/platform/agents/harness.md#расширения-проекта)) |
 | [settings.defaults.env](settings.defaults.env) | Настройки машины человека со значениями по умолчанию; свои значения и секреты - в `settings.env` вне git ([настройки окружения](../docs/platform/agents/harness-parameters.md#настройки-окружения)) |
 | [methodology.json](methodology.json) | Реестр правил `modules`, процессы `processes`, промпты `prompts` и политики `policies.findings`, `policies.size`, `policies.authorship`, `policies.permissions`, `policies.text`, `policies.issues` |
 | [pipelines.json](pipelines.json) | Только именованные композиции процессов, их зависимости и переходы: `change`, `release` |

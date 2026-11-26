@@ -14,7 +14,7 @@ from installer.catalog import pack_skills
 from installer.archive import archive
 from installer.documents import block_of, compose, json_text, markers
 from installer.resources import (ANSWERS, LOADER, AREA_MAP, CONFIG, GUIDES, LEGACY_MANIFEST, LEGACY_PROJECT, LEGACY_SEEDS, LOCK, METHODOLOGY, POSIX_MODES,
-                                 PROJECT, PROJECT_BLOCK, SESSION_SETUP, SETTINGS, SETTINGS_DEFAULTS, index_modes,
+                                 PROJECT, PROJECT_BLOCK, SETUP_WRAPPERS, SETTINGS, SETTINGS_DEFAULTS, index_modes,
                                  rewrite_lock, sha256)
 from installer.resources import msg as kit_msg
 from installer.resources import unpack
@@ -332,7 +332,8 @@ class Smoke:
                    self.repo)
         self.check(msg("smoke_settings_denied"), "smoke-project-message" in done.stdout and '"deny"' in done.stdout
                    and "Read(./" + SETTINGS + ")" in self.read(".claude/settings.json"))
-        self.write(SESSION_SETUP + "/01-smoke.sh", "touch smoke-session-step\n")
+        project = self.read_json(PROJECT)
+        self.write_json(PROJECT, {**project, "setup": {"session": ["touch smoke-session-first", "test -f smoke-session-first && touch smoke-session-step"]}})
         run(["bash", ".harness/provisioning/scripts/ensure-repo-deps.sh", "--only-steps"], self.repo)
         self.check(msg("smoke_session_steps"), (self.repo / "smoke-session-step").is_file())
         self.restore()
@@ -357,18 +358,38 @@ class Smoke:
         self.check(msg("smoke_legacy_rollback"), all((self.repo / path).is_file() for path in old)
                    and not (self.repo / PROJECT).exists() and self.read_json(LOCK) == lock)
         self.write_json(LEGACY_MANIFEST, project)
+        legacy_answers = LEGACY_PROJECT[1][0]
+        synced = self.read_json(legacy_answers)
+        synced["manifest"] = sha256((self.repo / LEGACY_MANIFEST).read_bytes())
+        self.write_json(legacy_answers, synced)
         self.commit("chore: smoke-legacy-steps")
         self.expect(msg("smoke_legacy_apply"), self.apply())
         moved = self.read_json(LOCK)["files"]
-        step = SESSION_SETUP + "/01-smoke-step.sh"
         deploy = ".github/workflows/project-deploy.yml"
         self.check(msg("smoke_legacy_moved"), not any((self.repo / path).exists() for path in old)
                    and all(renamed_path in moved for renamed_path in (AREA_MAP, ".github/workflows/project-deploy.yml"))
                    and "sessionSteps" not in self.read_json(PROJECT)["modules"]["agents"].get("settings", {})
-                   and "tools/smoke-step\"" in self.read(step)
+                   and self.read_json(PROJECT).get("setup", {}).get("session") == ["bash tools/smoke-step"]
                    and ".github/workflows/deploy.yml" not in self.read(deploy) and deploy in self.read(deploy))
         self.expect(msg("smoke_legacy_verify"), self.harness("verify", "--no-gates"))
         self.commit("chore: smoke-legacy-moved")
+        self.wrappers()
+
+    def wrappers(self) -> None:
+        """Обертка прежнего каталога шагов из одной строки exec встает командой в список манифеста, остальное называет verify."""
+        moved, kept = SETUP_WRAPPERS + "/snapshot/01-docker.sh", SETUP_WRAPPERS + "/session/02-two.sh"
+        self.write(moved, '#!/usr/bin/env bash\nexec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/tools/smoke docker.sh" "$@"\n')
+        self.write(kept, "#!/usr/bin/env bash\ncd tools\nexec bash smoke-step\n")
+        self.write(SETUP_WRAPPERS + "/session/01-one.sh", "exec bash tools/smoke-one.sh\n")
+        self.expect(msg("smoke_wrappers_apply"), self.apply(), reason=moved)
+        setup = self.read_json(PROJECT).get("setup", {})
+        self.check(msg("smoke_wrappers_moved"), setup.get("snapshot") == ["bash 'tools/smoke docker.sh'"]
+                   and setup.get("session") == ["bash tools/smoke-step"]
+                   and not (self.repo / moved).exists() and (self.repo / kept).is_file()
+                   and (self.repo / SETUP_WRAPPERS / "session/01-one.sh").is_file())
+        self.expect(msg("smoke_wrappers_verify"), self.harness("verify", "--no-gates"), 1, reason=kept)
+        self.check(msg("smoke_wrappers_synced"), self.read_json(ANSWERS)["manifest"] == sha256((self.repo / PROJECT).read_bytes()))
+        self.restore()
 
     def line_endings(self) -> None:
         """Последнее правило .gitattributes побеждает: блок комплекта уходит под правило проекта * eol=crlf, и

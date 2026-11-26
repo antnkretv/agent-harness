@@ -6,6 +6,7 @@ import json
 import os
 import re
 import runpy
+import shlex
 import subprocess
 import sys
 import tarfile
@@ -56,7 +57,10 @@ METHODOLOGY = ".harness/methodology.json"
 AREA_MAP = ".harness/project/area-map.json"
 SETTINGS = ".harness/settings.env"
 SETTINGS_DEFAULTS = ".harness/settings.defaults.env"
-SESSION_SETUP = ".harness/project/setup/session"
+SETUP = "setup"
+SETUP_PHASES = ("snapshot", "session")
+SETUP_WRAPPERS = ".harness/project/setup"
+OWN_SECTIONS = ("rules", SETUP)
 SKILLS = ".agents/skills"
 SIDES = ("backend", "frontend")
 SOURCES = ("literal", "env", "secret")
@@ -190,7 +194,7 @@ LEGACY_STEPS = "sessionSteps"
 
 @contextmanager
 def relocated(root: Path, dry_run: bool = False, temporary: bool = False):
-    with moved_layer(root, dry_run, temporary), extended(root, dry_run, temporary):
+    with moved_layer(root, dry_run, temporary), extended(root, dry_run, temporary), setup_moved(root, dry_run, temporary):
         yield
 
 
@@ -263,46 +267,141 @@ def extended(root: Path, dry_run: bool = False, temporary: bool = False):
         return
     print(msg("extended", ", ".join(f"{old} -> {new}" for old, new in moves)), file=sys.stderr)
     if steps:
-        print(msg("steps_moved", SESSION_SETUP, ", ".join(steps)), file=sys.stderr)
+        print(msg("steps_moved", f"{SETUP}.session", ", ".join(steps)), file=sys.stderr)
 
 
 def steps_moved(root: Path, originals: dict[Path, bytes | None]) -> list[str]:
+    moved: list[str] = []
+
+    def edit(project: dict) -> dict | None:
+        settings = project.get("modules", {}).get("agents", {}).get("settings")
+        if not isinstance(settings, dict) or LEGACY_STEPS not in settings:
+            return None
+        moved.extend("bash " + shlex.quote(step) for step in settings.pop(LEGACY_STEPS) or [])
+        setup = project.setdefault(SETUP, {})
+        if not isinstance(setup, dict) or not isinstance(setup.get("session", []), list):
+            raise Refusal(msg("param_setup_shape", SETUP, ", ".join(SETUP_PHASES)))
+        if moved:
+            setup.setdefault("session", []).extend(moved)
+        if not setup:
+            project.pop(SETUP)
+        return {f"modules.agents.settings.{LEGACY_STEPS}": None, **({SETUP: setup} if moved else {})}
+
+    manifest_rewritten(root, originals, edit, {SETUP: f"modules.agents.settings.{LEGACY_STEPS}"})
+    return moved
+
+
+def manifest_rewritten(root: Path, originals: dict[Path, bytes | None], edit, inherits: dict[str, str] | None = None) -> bool:
     from .documents import json_indent, json_text
 
     manifest = root / PROJECT
     if not manifest.is_file():
-        return []
+        return False
     raw = manifest.read_bytes()
     project = json.loads(raw)
-    settings = project.get("modules", {}).get("agents", {}).get("settings")
-    if not isinstance(settings, dict) or LEGACY_STEPS not in settings:
-        return []
-    steps = settings.pop(LEGACY_STEPS) or []
-    written = []
-    for index, step in enumerate(steps, 1):
-        name = f"{SESSION_SETUP}/{index:02d}-{step.rsplit('/', 1)[-1].removesuffix('.sh')}.sh"
-        target = root / name
-        originals.setdefault(target, target.read_bytes() if target.exists() else None)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text('#!/usr/bin/env bash\nexec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/'
-                          + step + '" "$@"\n', encoding="utf-8", newline="\n")
-        written.append(name)
+    answered = edit(project)
+    if answered is None:
+        return False
+    originals.setdefault(manifest, raw)
     text = json_text(project, json_indent(raw))
-    originals[manifest] = raw
     manifest.write_text(text, encoding="utf-8", newline="\n")
     answers = root / ANSWERS
     if answers.is_file():
         from .configure import read_answers, write_answers
 
-        originals[answers] = answers.read_bytes()
+        originals.setdefault(answers, answers.read_bytes())
         state = read_answers(root)
-        key = f"modules.agents.settings.{LEGACY_STEPS}"
-        state.setdefault("answers", {}).pop(key, None)
-        state["manifestKeys"] = [name for name in state.get("manifestKeys", []) if name != key]
+        entries, keys = state.setdefault("answers", {}), set(state.get("manifestKeys", []))
+        authors = {key: entries.get(key, entries.get(source, {})).get("by", "agent") for key, source in (inherits or {}).items()}
+        for key, value in answered.items():
+            if value is None:
+                entries.pop(key, None)
+                keys.discard(key)
+            else:
+                entries[key] = {"value": value, "by": authors.get(key) or entries.get(key, {}).get("by", "agent")}
+                keys.add(key)
+        state["manifestKeys"] = sorted(keys)
         if state.get("manifest") == sha256(raw):
             state["manifest"] = sha256(text.encode("utf-8"))
         write_answers(root, state)
-    return written
+    return True
+
+
+ROOT_OF_WRAPPER = '"$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/'
+WRAPPER_PLACE = re.compile(r"BASH_SOURCE|dirname|\$\{?0\b")
+SHELL_SYNTAX = frozenset("|&;<>()$`*?[]~#{}!\\")
+
+
+def wrapper_command(text: str) -> str | None:
+    lines = [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")]
+    if len(lines) != 1 or not lines[0].startswith("exec ") or lines[0].removeprefix("exec ").lstrip().startswith("-"):
+        return None
+    command = lines[0].removeprefix("exec ").strip().removesuffix(' "$@"')
+    if command.startswith(ROOT_OF_WRAPPER) and "/" not in command[len(ROOT_OF_WRAPPER):].split('"', 1)[0]:
+        command = command.replace(ROOT_OF_WRAPPER, '"./', 1)
+    command = command.replace(ROOT_OF_WRAPPER, '"')
+    if not command or WRAPPER_PLACE.search(command):
+        return None
+    if SHELL_SYNTAX & set(command):
+        return command
+    try:
+        return shlex.join(shlex.split(command))
+    except ValueError:
+        return None
+
+
+def setup_wrappers(root: Path) -> list[Path]:
+    return sorted(path for path in (root / SETUP_WRAPPERS).rglob("*") if path.is_file())
+
+
+@contextmanager
+def setup_moved(root: Path, dry_run: bool, temporary: bool):
+    phases: dict[str, list[tuple[Path, str | None]]] = {}
+    for phase in [] if temporary else SETUP_PHASES:
+        for path in sorted((root / SETUP_WRAPPERS / phase).glob("*.sh")):
+            if path.is_file():
+                phases.setdefault(phase, []).append((path, wrapper_command(path.read_text(encoding="utf-8", errors="replace"))))
+    moved = {path: (phase, command) for phase, found in phases.items()
+             if all(command is not None for _, command in found) for path, command in found}
+    kept = [path.relative_to(root).as_posix() for found in phases.values() for path, _ in found if path not in moved]
+    if kept:
+        print(msg("setup_kept", ", ".join(kept)), file=sys.stderr)
+    shown = ", ".join(f"{path.relative_to(root).as_posix()} -> {SETUP}.{phase}: {command}" for path, (phase, command) in moved.items())
+    if not moved or dry_run:
+        if shown:
+            print(msg("setup_would_move", shown), file=sys.stderr)
+        yield
+        return
+    originals: dict[Path, bytes | None] = {}
+    modes: dict[Path, int] = {}
+
+    def edit(project: dict) -> dict:
+        setup = project.setdefault(SETUP, {})
+        if not isinstance(setup, dict) or not all(isinstance(setup.get(phase, []), list) for phase in SETUP_PHASES):
+            raise Refusal(msg("param_setup_shape", SETUP, ", ".join(SETUP_PHASES)))
+        listed = {phase: set(setup.get(phase, [])) for phase in SETUP_PHASES}
+        for phase, command in moved.values():
+            if command not in listed[phase]:
+                setup.setdefault(phase, []).append(command)
+        return {SETUP: setup}
+
+    try:
+        if not manifest_rewritten(root, originals, edit):
+            yield
+            return
+        for path in moved:
+            originals[path], modes[path] = path.read_bytes(), path.stat().st_mode
+            path.unlink()
+            prune(root, path)
+        yield
+    except BaseException:
+        for path, content in originals.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+            if path in modes:
+                os.chmod(path, modes[path])
+        raise
+    print(msg("setup_moved", shown), file=sys.stderr)
 
 
 @contextmanager
