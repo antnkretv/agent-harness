@@ -243,6 +243,7 @@ class Smoke:
         self.check(msg("smoke_idempotent"), self.clean())
         self.expect(msg("smoke_check_all"), [sys.executable, ".harness/scripts/check/check-all.py", "--base", self.base],
                     reason="NONE" if self.adapters else "")
+        self.expect(msg("smoke_kit_anchors"), [sys.executable, ".harness/scripts/check/check-docs.py", "--anchors", "--kit-files"])
         # Самопроверки поставляемого кода в поставку не входят: сценарий кладет их в дерево на время прогона.
         shutil.copytree(KIT / "tests" / "platform", self.repo / ".harness" / "tests", dirs_exist_ok=True)
         self.expect(msg("smoke_self_manifest"), ["bash", ".harness/tests/manifest.sh"])

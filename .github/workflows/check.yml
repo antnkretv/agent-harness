@@ -1,0 +1,44 @@
+# Проверка комплекта на каждом PR и пуше в develop и master: сверка состава, следов и комментариев,
+# воспроизводимость архива, smoke установки в пустые репозитории и самопроверки слоя в них.
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [develop, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - name: Smoke tools
+        run: |
+          bash payload/.harness/provisioning/scripts/ensure-vale.sh --ci
+          bash payload/.harness/provisioning/scripts/ensure-shellcheck.sh --ci
+          bash payload/.harness/provisioning/scripts/ensure-dotnet-sdk.sh --repo tools/fixtures/dotnet/src --no-runtimes --ci
+      - name: Prompt probes self-test
+        run: python3 tests/prompt-probes/run.py --self-test
+      - name: Kit check
+        run: python3 tools/kit.py check --adapters
+      - name: Kit archive
+        run: python3 tools/kit.py build --out dist
+      - name: Upload kit archive
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-harness
+          path: dist/*.tar.gz
+          if-no-files-found: error

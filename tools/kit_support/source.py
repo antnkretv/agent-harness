@@ -9,7 +9,7 @@ from installer.catalog import owner
 from installer.resources import CATALOG
 
 from .catalog_checks import catalog_paths
-from .context import KIT, REFERENCE, ROOT, TREES, catalog, msg
+from .context import KIT, REFERENCE, TREES, catalog, msg
 
 
 def git(*args: str, data: bytes | None = None, accept: tuple[int, ...] = (0,)) -> bytes:
@@ -31,7 +31,7 @@ def leak_rules(kit: dict, installed: bool) -> list[tuple[re.Pattern[str], tuple[
     """В установленном дереве пути исключений читаются от корня проекта, а шаблоны со scope kit (пути
     приложений, номера задач) законны и не применяются. Путь к репозиторию происхождения - след везде.
     Имя технологии законно в каталоге и в файлах расширения, которое ее несет (modules правила)."""
-    rules = [(re.compile(re.escape(str(ROOT))), ())]
+    rules = [(re.compile(re.escape(str(KIT))), ())]
     for rule in kit["leaks"]:
         if installed and rule.get("scope") == "kit":
             continue
@@ -46,7 +46,7 @@ def leak_rules(kit: dict, installed: bool) -> list[tuple[re.Pattern[str], tuple[
 
 
 def module_mask(modules: dict) -> re.Pattern[str]:
-    """Пути модулей каталога: путь называет модуль, а не технологию или каталог Beerent, и правилу следа не виден."""
+    """Пути модулей каталога: путь называет модуль, а не технологию или каталог проекта, и правилу следа не виден."""
     paths = sorted((path for path in catalog_paths(modules) if "/" in path), key=len, reverse=True)
     return re.compile(r"(?<![\w/-])(?:" + "|".join(map(re.escape, paths)) + r")(?![\w-])")
 

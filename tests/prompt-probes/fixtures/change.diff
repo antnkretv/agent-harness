@@ -79,8 +79,9 @@ diff --git a/.harness/scripts/with-file-lock.py b/.harness/scripts/with-file-loc
 diff --git a/.harness/messages.env b/.harness/messages.env
 --- a/.harness/messages.env
 +++ b/.harness/messages.env
-@@ -203,3 +203,5 @@
+@@ -206,4 +206,6 @@
  MSG_perms_ledger_unwritten='решение хука запретов не записано в журнал сессии: %s'
+ MSG_gate_close_bypass='Запрос на слияние закрывается только командой ./.harness/hooks/python.cmd .harness/lib/forge.py close-change <номер> --body-file <файл>: она публикует комментарий с причиной закрытия, продолжением работы, сохраненным и оставшимся и только потом закрывает запрос. Комментарий собери командой %s.'
  MSG_gate_settings_read='Чтение .harness/settings.env закрыто агентам: файл держит токены и личные настройки человека. Нужную настройку назовите человеку, значение он задает сам.'
  MSG_workspace_settings_copied='ссылку %s на settings.env основного клона создать нельзя (%s): лежит копия, и правку настроек основного клона копия задачи не увидит'
 +MSG_lock_timeout='блокировка %s занята процессом %s дольше %s с'

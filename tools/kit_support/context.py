@@ -7,7 +7,6 @@ from installer.catalog import load_catalog
 from installer.resources import KIT_DOCUMENTS, LINE, fill, runtime_files
 
 KIT = Path(__file__).resolve().parents[2]
-ROOT = KIT.parent
 SHIPPED = (*KIT_DOCUMENTS, *runtime_files(KIT))
 TREES = ("payload", "fragments", "skills")
 TEMPLATES = dict(LINE.findall((KIT / "tools" / "messages.env").read_text(encoding="utf-8")))

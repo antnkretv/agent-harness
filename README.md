@@ -1,99 +1,48 @@
-# Комплект agent-harness
+# agent-harness
 
-Комплект ставит в репозиторий проекта правила и проверки для работы с ИИ-агентами. Агент берет
-задачу, ведет ее до PR по одному процессу, а проверки и ревью другими агентами не пускают в основную
-ветку то, что нарушает правила проекта. Особенности проекта задает его манифест `.harness/project/manifest.json`,
-а технологии - модули каталога [`modules.json`](modules.json).
-
-## Что получает проект
-
-- `AGENTS.md` и правила агентов Claude Code, Codex и Cursor: одна инструкция на всех, запреты команд.
-- Процесс задачи `issue-dev`: от задачи до PR с ревью и Ready, переходы между шагами - командами.
-- Гейты: документация и ссылки, тексты и реестры сообщений, комментарии, секреты, формат коммитов.
-- Для .NET - журнал диагностик сборки и форматирование CSharpier, для TypeScript - обязательные правила ESLint; анализаторы и арх-тесты проекта комплект зовет точками входа.
-- CI на GitHub Actions или GitLab CI, ревью тремя проходами, скиллы и Spec Kit.
-
-Что ставит каждый модуль - [справочник параметров](payload/docs/platform/agents/harness-parameters.md#модули),
-что поддерживается и где границы - [границы внедрения](PARAMETERS.md#границы-внедрения).
+Комплект ставит в репозиторий проекта правила, гейты и конвейер задачи `issue-dev` для работы ИИ-агентов.
+В git проекта лежат только его настройки и тонкая оболочка: `.harness/project/`, `.harness/state/lock.json`,
+загрузчик `.harness/ah.py`, workflow CI, блоки комплекта в `AGENTS.md` и настройки агентов. Остальное
+`ah install` ставит по закрепленной в lock версии в неотслеживаемые пути.
 
 ## Быстрый старт
 
-Нужны архив `agent-harness-<версия>.tar.gz` с его sha256, клон проекта, из которого `git push` проходит
-без пароля, и агент: Claude Code, Codex или Cursor. На Windows - Git for Windows с Bash и Python 3.11+.
+Подключить проект, один раз ([AGENT.md](AGENT.md), этапы установки):
 
-1. Распакуйте архив вне репозитория проекта:
+```bash
+V=<версия>; URL=https://github.com/antnkretv/agent-harness/releases/download/v$V
+curl -fLO "$URL/agent-harness-$V.tar.gz" -fLO "$URL/agent-harness-$V.tar.gz.sha256"
+sha256sum -c "agent-harness-$V.tar.gz.sha256" && tar -xzf "agent-harness-$V.tar.gz"
+python3 "agent-harness-$V/ah.py" init --target <проект> --archive "agent-harness-$V.tar.gz" --next
+```
 
-   ```bash
-   KIT="$HOME/.cache/harness/agent-harness-<версия>"
-   rm -rf "$KIT" && mkdir -p "$HOME/.cache/harness" && tar -xzf agent-harness-<версия>.tar.gz -C "$HOME/.cache/harness"
-   ```
+Вопросы `init` агент ведет скиллом `agent-harness-<версия>/skills/harness-init/SKILL.md` архива.
 
-2. Откройте сессию агента в клоне проекта и попросите выполнить `$KIT/skills/harness-init/SKILL.md`
-   с путем к архиву и его sha256, подставив вместо `$KIT` полный путь каталога распаковки. Скилл
-   никуда не копируется: ни в проект, ни в каталог скиллов пользователя.
-3. Дальше агент ведет установку сам тремя этапами, каждый - отдельной сессией и отдельным PR:
+Поставить у разработчика, в CI и в облачной сессии; хуки `post-checkout`, `post-merge` и старт сессии агента
+зовут ее сами:
 
-| Этап | Что делает | Готово, когда |
-| --- | --- | --- |
-| 1. Установка | вопросы о модулях владельцу, `apply`, поставщик кода | `verify` без ошибок, PR открыт |
-| 2. Документация | документы проекта, глоссарий, предметная область, манифест | гейты документации зеленые |
-| 3. Код | анализаторы, форматтеры, архитектурные тесты на существующем коде | все гейты `check-all` зеленые |
-
-Порядок, критерии готовности и отчет этапа - [AGENT.md](AGENT.md), шаги этапов -
-[`installer/stages/`](installer/stages/STAGE-1.md). Без чата те же шаги идут командами этих файлов.
+```bash
+python3 .harness/ah.py install   # Windows: py -3 .harness/ah.py install
+```
 
 ## Обновление и смена настроек
 
-Выпуск новой версии ставит `python3 .harness/ah.py upgrade` в клоне проекта: ветка, `apply` новой версией,
-lock и черновой PR ([установка по lock](payload/docs/platform/agents/harness.md#установка-по-lock)). Скиллы
-ниже ведут установку и обновление из архива.
+```bash
+python3 .harness/ah.py upgrade [--version <версия>]   # ветка, новая версия, lock и черновой PR
+```
 
-| Скилл | Из какого архива | Что делает |
-| --- | --- | --- |
-| [`harness-init`](skills/harness-init/SKILL.md) | ставимой версии | первая установка: этап 1 |
-| [`harness-sync`](skills/harness-sync/SKILL.md) | новой версии | обновление: новые вопросы, `apply` новой версией, перенос нужных правок проекта, приемка, PR |
-| [`harness-configure`](skills/harness-configure/SKILL.md) | установленной версии | смена модулей и настроек |
+Обновление из архива и смена модулей - скиллы `harness-sync` и `harness-configure` архива
+([AGENT.md](AGENT.md#обновление-и-смена-настроек)).
 
-Скиллы и установщик живут только в архиве и никуда не копируются. Агенту называют файл скилла в
-распакованном архиве: `harness-sync` - `$KIT/skills/harness-sync/SKILL.md` архива новой версии,
-`harness-configure` - `$INSTALLED/skills/harness-configure/SKILL.md` архива установленной, где
-`$INSTALLED` - каталог его распаковки.
+## Выпуск
 
-Архив установленной версии хранит владелец: из него идут `harness-configure` и `verify`, его версию и
-`digest` называет `.harness/state/lock.json` проекта; обновлению он не нужен. После обновления
-установленной становится новая версия, и `harness-configure` дальше идет из ее архива.
+```bash
+git switch master && git merge --no-ff origin/develop    # version в kit.json поднята в develop
+git tag v<версия> && git push origin master v<версия>    # workflow release.yml публикует архив и sha256
+```
 
-## Документы эксплуатации и выкладки
+## Подробнее
 
-| Заготовка | Модуль |
-| --- | --- |
-| [Выкладка](payload/docs/platform/delivery/deploy.md) | `release/tag-flow` |
-| [Алерты](payload/docs/platform/operations/alerting.md) | `alert-triage` |
-| [Дашборды](payload/docs/platform/operations/dashboards.md) | `core` |
-| [Локальный стек](payload/docs/platform/operations/local-stack.md) | `core` |
-
-Заготовки заполняет проект; существующие документы установка не перезаписывает. Удаленную
-заготовку установка не возвращает, а ссылку на нее снимает из индекса документов.
-
-## Состав
-
-| Путь | Что это |
-| --- | --- |
-| [`AGENT.md`](AGENT.md) | вход агента-установщика: этапы, остановка, ошибки, критерии готовности, отчет |
-| [`installer/stages/`](installer/stages/STAGE-1.md) | шаги и команды этапов 1-3 |
-| [`ah.py`](ah.py) | установщик и пакет [`installer/`](installer/cli.py): команды называет `ah.py --help` |
-| [`skills/`](skills/harness-init/SKILL.md) | скиллы установки, обновления и смены настроек |
-| [`modules.json`](modules.json) | каталог модулей: вопросы, расширения, настройки, детекторы, причины выключения |
-| [`kit.json`](kit.json) | состав и версия: файлы, их модули и роли, зависимости |
-| [`payload/`](payload/AGENTS.md) | файлы слоя в раскладке репозитория проекта |
-| [`fragments/`](fragments/stack.node/.claude/settings.json) | дополнения JSON-файлов от модулей |
-| [`messages.env`](messages.env) | реестр сообщений установщика |
-| [`PARAMETERS.md`](PARAMETERS.md) | границы внедрения, архив под решения, каталог модулей, манифест, коды установщика |
-| `templates/` | только в полном комплекте: шаблоны инструкций, из которых `pack` собирает их под решения |
-
-## Дальше
-
-- Как устроен установленный слой, настройка и обновление - [harness.md](payload/docs/platform/agents/harness.md).
-- Конвейер, процессы и исполнители - [слой платформы](payload/.harness/README.md#что-объявляет-конвейер).
-- Архитектурные гейты по стекам - [gates.md](payload/docs/platform/architecture/gates.md).
-- Архив только под выбранные модули - [архив под решения](PARAMETERS.md#архив-под-решения).
+- Установленный слой, установка по lock и обновление - [harness.md](payload/docs/platform/agents/harness.md).
+- Модули, архив под решения, манифест и коды установщика - [PARAMETERS.md](PARAMETERS.md).
+- Сборка, проверка, выпуск и устройство комплекта - [MAINTAINING.md](MAINTAINING.md).

@@ -2,10 +2,10 @@
 """Пробы промптов и шаблонов поставки: одна задача на двух коммитах комплекта, одна модель, механическая оценка.
 Звать при правке промптов ревью, шаблонов текстов и правил публикуемого текста в payload.
 
-    python3 harness-kit/tests/prompt-probes/run.py --before origin/develop --after HEAD
-    python3 harness-kit/tests/prompt-probes/run.py --probe change-text --reps 1
-    python3 harness-kit/tests/prompt-probes/run.py --score описание.md
-    python3 harness-kit/tests/prompt-probes/run.py --self-test
+    python3 tests/prompt-probes/run.py --before origin/develop --after HEAD
+    python3 tests/prompt-probes/run.py --probe change-text --reps 1
+    python3 tests/prompt-probes/run.py --score описание.md
+    python3 tests/prompt-probes/run.py --self-test
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from collections import defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 KIT = os.path.dirname(os.path.dirname(HERE))
-REPO = os.path.dirname(KIT)
+
 FIXTURES = os.path.join(HERE, "fixtures")
 LINE = re.compile(r"^MSG_([a-z][a-z0-9_]*)='([^']*)'", re.MULTILINE)
 with open(os.path.join(HERE, "messages.env"), encoding="utf-8") as _messages:
@@ -100,7 +100,7 @@ class Harness:
         self.result = importlib.import_module("session_results").native_result
 
 
-def git(*args: str, cwd: str = REPO, check: bool = True, env: dict | None = None) -> str:
+def git(*args: str, cwd: str = KIT, check: bool = True, env: dict | None = None) -> str:
     result = subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *args], cwd=cwd, capture_output=True, text=True,
                             encoding="utf-8", env=env)
     if check and result.returncode != 0:
@@ -133,7 +133,7 @@ def build_kit(ref: str, folder: str) -> str:
     """Комплект коммита собирает его же kit.py: сборка из чужих инструментов проверяла бы не ту версию."""
     source = os.path.join(folder, "source")
     os.makedirs(source)
-    archive = subprocess.Popen(["git", "archive", "--format=tar", ref, os.path.basename(KIT)], cwd=REPO,
+    archive = subprocess.Popen(["git", "archive", "--format=tar", ref], cwd=KIT,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     untar = subprocess.run(["tar", "-x", "-C", source], stdin=archive.stdout, capture_output=True)
     archive.stdout.close()
@@ -143,7 +143,7 @@ def build_kit(ref: str, folder: str) -> str:
     git("init", "-q", cwd=source)
     commit(source, INPUTS["snapshot_commit"])
     out = os.path.join(folder, "build")
-    done = subprocess.run([sys.executable, os.path.join(source, os.path.basename(KIT), "tools", "kit.py"), "build",
+    done = subprocess.run([sys.executable, os.path.join(source, "tools", "kit.py"), "build",
                            "--out", out], cwd=source, capture_output=True, text=True, encoding="utf-8")
     kits = [entry.path for entry in os.scandir(out) if entry.is_dir()] if os.path.isdir(out) else []
     if done.returncode != 0 or len(kits) != 1:

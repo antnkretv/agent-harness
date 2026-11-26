@@ -21,7 +21,7 @@ def shipped_manifest(kit: dict, folder: Path) -> dict:
             for path in sorted(folder.rglob("*")) if path.is_file() and path.name != "kit.json"}
     shipped = {key: value for key, value in kit.items() if key not in ("_", "files", "leaks", "provenance")}
     shipped["files"] = {
-        path: {key: value for key, value in meta.items() if key not in ("origin", "listed")}
+        path: {key: value for key, value in meta.items() if key != "listed"}
         for path, meta in sorted(kit["files"].items())}
     shipped["digest"] = sha256(json_text({"manifest": shipped, "tree": tree}).encode("utf-8"))
     return shipped

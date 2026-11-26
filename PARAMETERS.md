@@ -186,6 +186,18 @@ prose
 `codex` и `cursor` в `review`, `issue-agent` и `alert-triage`, решение `auth` расширения `codex`,
 настройка `onFailure` каналов уведомлений.
 
+## Документы эксплуатации и выкладки
+
+| Заготовка | Модуль |
+| --- | --- |
+| [Выкладка](payload/docs/platform/delivery/deploy.md) | `release/tag-flow` |
+| [Алерты](payload/docs/platform/operations/alerting.md) | `alert-triage` |
+| [Дашборды](payload/docs/platform/operations/dashboards.md) | `core` |
+| [Локальный стек](payload/docs/platform/operations/local-stack.md) | `core` |
+
+Заготовки заполняет проект; существующие документы установка не перезаписывает. Удаленную
+заготовку установка не возвращает, а ссылку на нее снимает из индекса документов.
+
 ## Манифест комплекта `kit.json`
 
 | Ключ | Что задает |

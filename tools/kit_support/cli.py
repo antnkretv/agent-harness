@@ -1,17 +1,15 @@
-"""Сборка и сверка комплекта harness в репозитории-источнике.
+"""Сборка и сверка комплекта harness в его репозитории.
 
-    harness-kit/payload/.harness/hooks/python.cmd harness-kit/tools/kit.py build [--out <каталог>]   # каталог и архив полного комплекта
-    harness-kit/payload/.harness/hooks/python.cmd harness-kit/tools/kit.py build --config <файл>     # архив под решения манифеста или config.json
-    harness-kit/payload/.harness/hooks/python.cmd harness-kit/tools/kit.py check [--adapters | --no-smoke]  # состав, следы, комментарии, воспроизводимость, smoke
+    payload/.harness/hooks/python.cmd tools/kit.py build [--out <каталог>]   # каталог и архив полного комплекта
+    payload/.harness/hooks/python.cmd tools/kit.py build --config <файл>     # архив под решения манифеста или config.json
+    payload/.harness/hooks/python.cmd tools/kit.py check [--adapters | --no-smoke]  # состав, следы, комментарии, воспроизводимость, smoke
 
-Порядок сопровождения - harness-kit/MAINTAINING.md, раздел "Сопровождение".
+Порядок сопровождения - MAINTAINING.md, раздел "Сопровождение".
 """
 
 from __future__ import annotations
 
 import argparse
-import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -20,7 +18,7 @@ from installer.resources import STACKS_WITH_ADAPTER, sha256
 
 from .comment_checks import comment_problems
 from .composition import composition
-from .context import KIT, ROOT, manifest, msg
+from .context import KIT, manifest, msg
 from installer.resources import unpack
 
 from .packaging import build, stage
@@ -28,16 +26,9 @@ from .smoke import smoke
 from .source import leak_rules, leaks
 
 
-def kit_anchors() -> list[str]:
-    """Якоря файлов комплекта сверяются здесь по установленной копии: гейт проекта их пропускает."""
-    done = subprocess.run([sys.executable, ".harness/scripts/check/check-docs.py", "--anchors", "--kit-files"], cwd=ROOT,
-                          capture_output=True, text=True, encoding="utf-8")
-    return [] if done.returncode == 0 else [msg("kit_anchors_broken", done.stdout.strip()[-2000:])]
-
-
 def check(args: argparse.Namespace) -> int:
     kit = manifest()
-    problems = composition(kit) + comment_problems(kit) + kit_anchors()
+    problems = composition(kit) + comment_problems(kit)
     with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
         folder = stage(kit, Path(first))
         shipped = sorted(path.relative_to(folder).as_posix() for path in folder.rglob("*") if path.is_file())

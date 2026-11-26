@@ -273,9 +273,6 @@ def check_docs_free_of_markers(problems: list[str]) -> None:
 
 def check_fact_copies(problems: list[str]) -> None:
     roots = [ROOT]
-    payload = os.path.join(ROOT, "harness-kit", "payload")
-    if os.path.isdir(payload):
-        roots.append(payload)
     numbers = number_words()
     contexts = fact_contexts()
     numbered = re.compile(platform_messages.msg("pipeline_step_number"), re.I)

@@ -125,7 +125,7 @@ def composition(kit: dict) -> list[str]:
     problems += adapter_problems(kit, modules)
     problems += wiring_problems(kit, files, paths)
     problems += reference_problems(kit, modules)
-    problems += inventory_problems(kit)
+    problems += listing_problems(kit)
     problems += settings_problems()
     service = sorted(json.loads((KIT / "payload" / AREA_MAP).read_text(encoding="utf-8"))["areas"])
     if service != sorted(SERVICE_AREAS):
@@ -318,32 +318,19 @@ def settings_problems() -> list[str]:
     return [msg("kit_settings_table", SETTINGS_DEFAULTS, ", ".join(f"{name} ({module})" for name, module in shipped.items()))]
 
 
-INVENTORY_ROW = re.compile(r"^\| `([^`]+)` \| (\d+) \| (\d+) \| (\d+) \|$")
 SEED_ROW = re.compile(r"^\| \[[^\]]+\]\(payload/([^)]+)\) \| `([^`]+)` \|$")
 NOTE = re.compile(r"^### `([^`]+)`", re.M)
 
 
-def inventory_problems(kit: dict) -> list[str]:
-    """Счет файлов INVENTORY.md и таблица заготовок README.md - выводы из kit.json: правка состава без них
-    разошлась бы с копией молча, поэтому сверка называет строку, которую ждет. Заметка MAINTAINING.md
-    называет существующий файл одним разделом: переименование файла оставило бы ее без адресата.
-    Строки README - ровно заготовки папок SEED_FOLDERS."""
+def listing_problems(kit: dict) -> list[str]:
+    """Таблица заготовок PARAMETERS.md - вывод из kit.json: правка состава без нее разошлась бы с копией молча,
+    поэтому сверка называет строку, которую ждет. Заметка MAINTAINING.md называет существующий файл одним
+    разделом: переименование файла оставило бы ее без адресата. Строки таблицы - ровно заготовки папок
+    SEED_FOLDERS."""
     files = kit["files"]
-    counts: dict[str, list[int]] = {}
-    for meta in files.values():
-        counts.setdefault(owner(meta), [0, 0])[0 if meta.get("origin") else 1] += 1
-    listed = {path: ", ".join(file_modules(meta)) for path, meta in files.items() if meta.get("listed") == "README.md"}
-    expected = {module: counts.get(module, [0, 0]) for module in sorted({owner(files[path]) for path in listed})}
-    problems, rows = [], {}
-    for line in (KIT / "INVENTORY.md").read_text(encoding="utf-8").splitlines():
-        if row := INVENTORY_ROW.match(line):
-            rows.setdefault(row.group(1), []).append([int(cell) for cell in row.groups()[1:]])
-    for module in sorted(set(expected) | set(rows)):
-        wanted = expected[module] + [sum(expected[module])] if module in expected else None
-        if rows.get(module, []) != ([wanted] if wanted else []):
-            problems.append(msg("kit_inventory_count", module, " | ".join(map(str, wanted)) if wanted else "-"))
-    seeds = {}
-    for line in (KIT / "README.md").read_text(encoding="utf-8").splitlines():
+    listed = {path: ", ".join(file_modules(meta)) for path, meta in files.items() if meta.get("listed") == "PARAMETERS.md"}
+    problems, seeds = [], {}
+    for line in (KIT / "PARAMETERS.md").read_text(encoding="utf-8").splitlines():
         if row := SEED_ROW.match(line):
             seeds.setdefault(row.group(1), []).append(row.group(2))
     for path in sorted(set(listed) | set(seeds)):
