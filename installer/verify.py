@@ -106,7 +106,7 @@ def integrity(root: Path, lock: dict) -> list[Finding]:
         fields = done.stdout.decode("utf-8").split("\0")
         for source, number, pattern, path in sorted((fields[start:start + 4] for start in range(0, len(fields) - 3, 4)),
                                                     key=lambda record: record[3]):
-            if not pattern.startswith("!"):
+            if pattern == "/" + path:
                 found.append(Finding("error", msg("verify_hidden", path, pattern, source, number)))
     return found
 
