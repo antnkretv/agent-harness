@@ -709,10 +709,9 @@ class Smoke:
         self.write_json(LOCK, lock)
         self.write("docs/own.md", f"<{source.as_uri()}/blob/{old}/payload/docs/platform/agents/harness.md>\n")
         self.commit("chore: harness")
-        windows = self.work / "autocrlf.gitconfig"
-        windows.write_text("[core]\n\tautocrlf = true\n", encoding="utf-8")
         head = run(["git", "symbolic-ref", "HEAD"], self.repo).stdout
-        hook = {"AGENT_HARNESS_CACHE": str(self.work / "commit-cache"), "GIT_CONFIG_GLOBAL": str(windows),
+        hook = {"AGENT_HARNESS_CACHE": str(self.work / "commit-cache"),
+                "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.autocrlf", "GIT_CONFIG_VALUE_0": "true",
                 "GIT_DIR": str(self.repo / ".git"), "GIT_WORK_TREE": str(self.repo)}
         self.expect(msg("smoke_commit_built"), [sys.executable, str(self.repo / LOADER), "install"], env=hook)
         self.check(msg("smoke_commit_hook"), self.clean() and not (self.repo / ".git" / "shallow").exists()

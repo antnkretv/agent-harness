@@ -76,7 +76,8 @@ def unpacked(archive: Path, home: Path, tree: str, sha: str = "") -> Path:
 
 
 def isolated() -> dict:
-    local = subprocess.run(["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True).stdout.split()
+    local = set(subprocess.run(["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True).stdout.split())
+    local -= {"GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT"}
     return {key: value for key, value in os.environ.items() if key not in local}
 
 
