@@ -1,0 +1,1 @@
+Check PR правки ${FixRef} упал: ${FailedChecks}. Прочитай журналы упавших заданий командой ./.harness/hooks/python.cmd .harness/lib/forge.py job-log <задание>, исправь причину в копии задачи правки, закоммить и запушь в ее ветку. Затем выполни ${GateCommand}.

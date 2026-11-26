@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+
+msg_file="$1"
+
+root="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
+
+# shellcheck source=../.harness/scripts/ci-common.sh
+. "$root/.harness/scripts/ci-common.sh"
+
+harness_python "$root/.harness/scripts/pipeline/task-worktree.py" check --message "$msg_file" || exit 1
+
+status=0
+"$root/.harness/scripts/check/commit-format.sh" "$msg_file" || status=$?
+merge=
+case "$status" in
+  0) ;;
+  3) grep -v '^#' "$msg_file" | grep -m 1 '[^[:space:]]' | grep -q '^Merge ' || exit 0; merge=1 ;;
+  *) exit "$status" ;;
+esac
+
+cfg_prefix="$(manifest_get '.project.gitConfigPrefix' '')"
+[ -n "$cfg_prefix" ] || die @commit_no_identity
+
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')"
+
+issue="$(git config --get "branch.$branch.$cfg_prefix-issue" 2>/dev/null || true)"
+
+pr="$(git config --get "branch.$branch.$cfg_prefix-pr" 2>/dev/null || true)"
+
+trailers="$(harness_python - "$root" "$issue" "$pr" "$branch" 2>/dev/null <<'PY' | tr -d '\r'
+import os, sys
+sys.path.insert(0, os.path.join(sys.argv[1], ".harness", "lib"))
+import authorship, forge, tracker
+issue, pr, branch = sys.argv[2:5]
+issue = issue or tracker.branch_issue(branch) or ""
+print(tracker.issue_url(issue) if issue else "")
+print(forge.change_url(pr) if pr else "")
+print(forge.name)
+print(authorship.session_agent())
+PY
+)"
+{ read -r issue_url; read -r pr_url; read -r forge; read -r agent; } <<EOF
+$trailers
+EOF
+
+if [ -n "$issue_url" ]; then
+  git interpret-trailers --in-place --if-exists doNothing \
+    --trailer "Issue: $issue_url" "$msg_file"
+fi
+
+if [ -n "$agent" ]; then
+  git interpret-trailers --in-place --if-exists doNothing \
+    --trailer "Agent: $agent" "$msg_file"
+fi
+
+if [ -n "$pr_url" ]; then
+  git interpret-trailers --in-place --if-exists doNothing \
+    --trailer "PR: $pr_url" "$msg_file"
+elif [ -z "$pr" ] && [ -z "$merge" ] && [ -n "$forge" ]; then
+  warn @commit_no_pr "$branch" "$branch" "$cfg_prefix"
+fi
+
+exit 0

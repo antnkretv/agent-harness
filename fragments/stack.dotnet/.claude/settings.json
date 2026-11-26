@@ -1,0 +1,19 @@
+{
+	"hooks": {
+		"PreToolUse": [
+			{
+				"hooks": [
+					{
+						"command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"$env:CLAUDE_PROJECT_DIR\\.harness\\hooks\\code-cleanup.ps1\"",
+						"if": "Bash(git commit:*)",
+						"shell": "powershell",
+						"statusMessage": "Code Cleanup: dotnet format по solution, CSharpier по дереву…",
+						"timeout": 600,
+						"type": "command"
+					}
+				],
+				"matcher": "Bash"
+			}
+		]
+	}
+}

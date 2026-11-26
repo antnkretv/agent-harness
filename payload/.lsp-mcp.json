@@ -1,0 +1,11 @@
+{
+  "installation": {
+    "npm": {
+      "lsp-mcp-server": "1.1.26"
+    },
+    "bridgePatch": ".harness/provisioning/patches/lsp-mcp-server-1.1.26.patch"
+  },
+  "servers": [],
+  "requestTimeout": 180000,
+  "minify": "full"
+}

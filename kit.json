@@ -1,0 +1,2854 @@
+{
+  "_": [
+    "Состав комплекта harness: файлы, их модули и роли.",
+    "Формат - PARAMETERS.md, сопровождение - MAINTAINING.md."
+  ],
+  "name": "agent-harness",
+  "version": "1.1.0",
+  "repository": "https://github.com/antnkretv/agent-harness",
+  "released": [
+    ".vale/styles/config/views/CSharpMessages.yml",
+    ".config/eslint-target-architecture.js",
+    ".config/eslint-typescript.js"
+  ],
+  "dependencies": [
+    {
+      "name": "python",
+      "need": "required",
+      "minimum": "3.11",
+      "probe": [
+        "bash",
+        "{platform}/hooks/python.cmd",
+        "--version"
+      ],
+      "purpose": "установщик и гейты - от 3.11, тот интерпретатор, который выбирает .harness/hooks/python.cmd; хуки агента (.harness/hooks/*.py и импортируемые ими модули .harness/lib) совместимы с 3.8: python машины агента не провизионируется"
+    },
+    {
+      "name": "git",
+      "need": "required",
+      "minimum": "2.30",
+      "probe": [
+        "git",
+        "--version"
+      ],
+      "purpose": "установка, хуки"
+    },
+    {
+      "name": "git push",
+      "need": "required",
+      "local": true,
+      "status": [
+        "git",
+        "push",
+        "--dry-run",
+        "--no-verify",
+        "--porcelain",
+        "origin",
+        "HEAD:refs/heads/harness-doctor-probe"
+      ],
+      "purpose": "право пушить ветку в origin без запроса пароля: SSH-ключ в ~/.ssh или ssh-agent либо HTTPS-токен в git credential helper"
+    },
+    {
+      "name": "bash",
+      "need": "required",
+      "minimum": "3.2",
+      "probe": [
+        "bash",
+        "--version"
+      ],
+      "purpose": "git-хуки, установщики, гейт скриптов"
+    },
+    {
+      "name": "vale",
+      "need": "ci",
+      "module": "prose/vale",
+      "pinned": "3.13.0",
+      "pinFile": ".harness/provisioning/scripts/ensure-vale.sh",
+      "pinPattern": "VALE_VERSION:-([0-9.]+)",
+      "probe": [
+        "vale",
+        "--version"
+      ],
+      "purpose": "гейт prose"
+    },
+    {
+      "name": "shellcheck",
+      "need": "ci",
+      "module": "shell/shellcheck",
+      "pinned": "0.9.0",
+      "pinFile": ".harness/provisioning/scripts/ensure-shellcheck.sh",
+      "pinPattern": "SHELLCHECK_VERSION:-([0-9.]+)",
+      "probe": [
+        "shellcheck",
+        "--version"
+      ],
+      "purpose": "гейт shell-scripts"
+    },
+    {
+      "name": "gitleaks",
+      "need": "ci",
+      "module": "secrets/gitleaks",
+      "alternative": "docker",
+      "pinned": "8.30.1",
+      "pinFile": ".harness/scripts/check/check-all.py",
+      "pinPattern": "gitleaks:v([0-9.]+)@",
+      "probe": [
+        "gitleaks",
+        "version"
+      ],
+      "purpose": "гейт secret-scan; без бинаря - образ по digest через docker"
+    },
+    {
+      "name": "docker",
+      "need": "optional",
+      "module": "secrets/gitleaks",
+      "probe": [
+        "docker",
+        "--version"
+      ],
+      "purpose": "образ gitleaks, когда бинаря нет"
+    },
+    {
+      "name": "node",
+      "need": "required",
+      "module": "stack/node",
+      "minimum": "20.19",
+      "source": ".node-version",
+      "probe": [
+        "node",
+        "--version"
+      ],
+      "purpose": "ESLint, разборщик директив TypeScript"
+    },
+    {
+      "name": "npm",
+      "need": "required",
+      "module": "stack/node",
+      "source": "devEngines корневого package.json",
+      "probe": [
+        "npm",
+        "--version"
+      ],
+      "purpose": "дерево пакетов корня"
+    },
+    {
+      "name": "eslint",
+      "need": "required",
+      "module": "stack/node",
+      "verified": "10.11.0",
+      "source": "devDependencies корневого package.json",
+      "purpose": "адаптер node"
+    },
+    {
+      "name": "typescript-eslint",
+      "need": "required",
+      "module": "stack/node",
+      "verified": "8.70.1",
+      "source": "devDependencies корневого package.json",
+      "purpose": "разборщик директив"
+    },
+    {
+      "name": "dotnet",
+      "need": "required",
+      "module": "stack/dotnet",
+      "source": "global.json каталога решения",
+      "probe": [
+        "dotnet",
+        "--version"
+      ],
+      "purpose": "адаптер .NET"
+    },
+    {
+      "name": "csharpier",
+      "need": "required",
+      "module": "stack/dotnet",
+      "pinned": "1.3.0",
+      "pinFile": ".config/dotnet-tools.json",
+      "pinPattern": "\"csharpier\": \\{\\s*\"version\": \"([0-9.]+)\"",
+      "purpose": "форматтер C#: хук очистки кода перед коммитом, гейт dotnet-format и расширения редакторов"
+    },
+    {
+      "name": "pwsh",
+      "need": "optional",
+      "module": "stack/dotnet",
+      "pinned": "7.6.6",
+      "pinFile": ".harness/provisioning/scripts/ensure-pwsh.sh",
+      "pinPattern": "PWSH_VERSION:-([0-9.]+)",
+      "probe": [
+        "pwsh",
+        "--version"
+      ],
+      "purpose": "хук очистки кода .NET перед коммитом"
+    },
+    {
+      "name": "gh",
+      "need": "optional",
+      "module": "forge/github",
+      "probe": [
+        "gh",
+        "--version"
+      ],
+      "purpose": "адаптер GitHub: треды ревью, вердикты, задачи релиза, метки и секреты forge-setup.py"
+    },
+    {
+      "name": "gh auth",
+      "need": "required",
+      "local": true,
+      "module": "forge/github",
+      "status": [
+        "gh",
+        "auth",
+        "status"
+      ],
+      "purpose": "вход gh в GitHub: метки, секреты и защита веток forge-setup.py, PR установки"
+    },
+    {
+      "name": "GITLAB_TOKEN",
+      "need": "required",
+      "local": true,
+      "module": "forge/gitlab",
+      "env": [
+        "GITLAB_TOKEN"
+      ],
+      "purpose": "токен GitLab с ролью Maintainer в переменных среды или IDE: forge-setup.py, MR установки, круг ревью"
+    },
+    {
+      "name": "specify",
+      "need": "optional",
+      "module": "sdd/speckit",
+      "pinned": "1.2.0",
+      "pinFile": ".specify/init-options.json",
+      "pinPattern": "\"speckit_version\": \"([0-9.]+)\"",
+      "purpose": "только обновление поставки Spec Kit"
+    },
+    {
+      "name": "claude",
+      "need": "optional",
+      "module": "ci-agent/claude-code",
+      "pinned": "2.1.280",
+      "probe": [
+        "claude",
+        "--version"
+      ],
+      "purpose": "исполнитель claude-code ревью, агента задач и разбора алертов; ставит ensure-agent-cli.sh",
+      "pinSetting": "agents.cli.claudeVersion"
+    },
+    {
+      "name": "codex",
+      "need": "optional",
+      "module": "ci-agent/codex",
+      "pinned": "0.162.1",
+      "probe": [
+        "codex",
+        "--version"
+      ],
+      "purpose": "исполнитель codex ревью, агента задач и разбора алертов; ставит ensure-agent-cli.sh",
+      "pinSetting": "agents.cli.codexVersion"
+    },
+    {
+      "name": "cursor-agent",
+      "need": "optional",
+      "module": [
+        "agents/cursor",
+        "ci-agent/cursor"
+      ],
+      "pinned": "2026.10.22-27dcf5f",
+      "probe": [
+        "cursor-agent",
+        "--version"
+      ],
+      "purpose": "исполнитель cursor ревью, агента задач и разбора алертов; ставит ensure-agent-cli.sh",
+      "pinSetting": "agents.cli.cursorVersion"
+    },
+    {
+      "name": "CURSOR_API_KEY",
+      "need": "optional",
+      "local": true,
+      "module": [
+        "agents/cursor",
+        "ci-agent/cursor"
+      ],
+      "env": [
+        "CURSOR_API_KEY"
+      ],
+      "purpose": "ключ cursor-agent в переменных среды: сессии Cursor локального круга и агентов"
+    },
+    {
+      "name": "mcp",
+      "need": "optional",
+      "module": "stands/mcp-stand",
+      "pinned": "2.3.0",
+      "pinFile": ".harness/mcp-stand/requirements.txt",
+      "pinPattern": "(?m)^mcp==([0-9.]+)$",
+      "purpose": "сервер mcp-stand на стенде"
+    },
+    {
+      "name": "python-image",
+      "need": "optional",
+      "module": "stands/mcp-stand",
+      "pinned": "sha256:a58daefb915e1e03ad48f3ca4df8832065412c5c35cacb9d39f4229184de12b6",
+      "pinFile": ".harness/mcp-stand/Dockerfile",
+      "pinPattern": "FROM python:[0-9.]+-slim-bookworm@(sha256:[0-9a-f]{64})",
+      "purpose": "образ контейнера mcp-stand"
+    }
+  ],
+  "provenance": [
+    "kit.json"
+  ],
+  "leaks": [
+    {
+      "pattern": "(?i)\\baspire\\b",
+      "modules": [
+        "mcp/aspire",
+        "skills/aspire",
+        "skills/dotnet-docs"
+      ],
+      "allow": [
+        "payload/.agents/skills/README.md"
+      ],
+      "scope": "kit"
+    },
+    {
+      "pattern": "\\b(backend|apps)/[A-Za-z]",
+      "allow": [
+        "payload/.agents/skills/aspire-deployment/",
+        "payload/.agents/skills/opentelemetry/references/"
+      ],
+      "scope": "kit"
+    },
+    {
+      "pattern": "(?<![\\w&/])#\\d{3,5}\\b",
+      "allow": [
+        "payload/.specify/scripts/",
+        "payload/.agents/skills/aspire-monitoring/",
+        "payload/.agents/skills/aspire-orchestration/",
+        "payload/.agents/skills/aspireify/",
+        "payload/.agents/skills/microsoft-docs/",
+        "payload/.agents/skills/drawio-skill/"
+      ],
+      "scope": "kit"
+    },
+    {
+      "pattern": "(?i)grafana\\.",
+      "modules": [
+        "skills/grafana"
+      ]
+    },
+    {
+      "pattern": "(?i)\\bslack\\b",
+      "modules": [
+        "notifications/slack",
+        "skills/grafana"
+      ],
+      "scope": "kit"
+    }
+  ],
+  "files": {
+    ".harness/ah.py": {
+      "module": "core",
+      "role": "managed",
+      "place": "shell"
+    },
+    ".harness/lib/file_lock.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/with-file-lock.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".agents/rules/scope-findings.md": {
+      "module": [
+        "agents/claude-code",
+        "agents/cursor"
+      ],
+      "role": "managed",
+      "place": "shell"
+    },
+    ".agents/rules/specs.md": {
+      "module": [
+        "agents/claude-code",
+        "agents/cursor"
+      ],
+      "also": [
+        "sdd/speckit"
+      ],
+      "role": "managed",
+      "place": "shell"
+    },
+    ".agents/skills/README.md": {
+      "module": "core",
+      "role": "block",
+      "render": true
+    },
+    ".agents/skills/alerting-irm/SKILL.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/alerting-irm/references/alerting.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/alerting-irm/references/irm.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/alerting-irm/references/slo.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/architecture-review/SKILL.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-deployment/SKILL.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-deployment/references/aws.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-deployment/references/azure.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-deployment/references/cicd.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-deployment/references/docker-compose.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-deployment/references/github-actions-azure-csharp.yml": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-deployment/references/github-actions-azure-typescript.yml": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-deployment/references/javascript.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-deployment/references/kubernetes.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-deployment/references/preflight.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-init/SKILL.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-init/references/init-workflow.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-init/references/templates.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-monitoring/SKILL.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-monitoring/references/diagnostics-bridge.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-monitoring/references/monitoring.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-monitoring/references/playwright-handoff.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-orchestration/SKILL.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-orchestration/references/agent-workflows.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-orchestration/references/app-commands.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-orchestration/references/detection.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-orchestration/references/resource-management.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire-orchestration/references/safety-guardrails.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire/SKILL.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire/references/aspire-13-3-breaking-changes.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspire/references/aspire-13-5-breaking-changes.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspireify/SKILL.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspireify/references/apphost-wiring.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspireify/references/csharp-authoring.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspireify/references/docker-compose.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspireify/references/full-solution-apphosts.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspireify/references/javascript-apps.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspireify/references/opentelemetry.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspireify/references/scan-and-propose.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspireify/references/service-defaults.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspireify/references/typescript-authoring.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/aspireify/references/validation.md": {
+      "module": "skills/aspire",
+      "role": "managed"
+    },
+    ".agents/skills/code-simplifier/SKILL.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".agents/skills/dashboarding/SKILL.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/dashboarding/references/json-schema.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/docs-text/SKILL.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".agents/skills/code-docs/SKILL.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".agents/skills/dotnet-inspect/SKILL.md": {
+      "module": "skills/dotnet-docs",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/LICENSE": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/SKILL.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/agents/openai.yaml": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/data/SHAPE-INDEX-NOTICE.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/data/databricks-icons.json": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/data/diagram-ir.schema.json": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/data/lobe-icons.json": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/data/shape-index.json.gz": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/autolayout.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/ci-gate.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/cookbook.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/databricks.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/derasterize.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/diagram-ir.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/diagram-types.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/live-infra.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/mcp.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/mermaid-authoring.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/pr-bot.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/security.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/semantic-workflows.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/shapes.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/style-extraction.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/style-presets.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/toolbox.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/troubleshooting.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/tubemap.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/references/xml-authoring.md": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/aiicons.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/asyncapiimports.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/autolayout.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/buildup.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/c4.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/ciimports.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/composeimports.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/compress.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/dbxicons.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/diagram_ir.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/diagramctl.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/diagramctl_mcp.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/dockerimports.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/drawio2mermaid.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/drawio2pptx.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/drawiodiff.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/drawiohtml.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/edgeports.py": {
+      "module": "skills/drawio",
+      "role": "managed",
+      "executable": true
+    },
+    ".agents/skills/drawio-skill/scripts/encode_drawio_url.py": {
+      "module": "skills/drawio",
+      "role": "managed",
+      "executable": true
+    },
+    ".agents/skills/drawio-skill/scripts/explain.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/goimports.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/graphqlerd.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/heatmap.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/jsimports.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/k8simports.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/openapiimports.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/prdiff.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/protoimports.py": {
+      "module": "skills/drawio",
+      "role": "managed",
+      "executable": true
+    },
+    ".agents/skills/drawio-skill/scripts/pyclasses.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/pyimports.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/raster2drawio.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/relabel.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/repair_png.py": {
+      "module": "skills/drawio",
+      "role": "managed",
+      "executable": true
+    },
+    ".agents/skills/drawio-skill/scripts/restyle.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/runbook.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/rustimports.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/seqlayout.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/shapesearch.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/sqlerd.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/svgflow.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/tfimports.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/tfstate.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/timelapse.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/tubemap.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/scripts/validate.py": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/styles/built-in/colorblind-safe.json": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/styles/built-in/corporate.json": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/styles/built-in/dark.json": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/styles/built-in/default.json": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/styles/built-in/handdrawn.json": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/drawio-skill/styles/schema.json": {
+      "module": "skills/drawio",
+      "role": "managed"
+    },
+    ".agents/skills/grafana-oss/SKILL.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/grafana-oss/references/alerting.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/grafana-oss/references/api.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/grafana-oss/references/config.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/grafana-oss/references/dashboard-json.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/grafana-oss/references/dashboards.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/grafana-oss/references/datasources.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/grafana-oss/references/panel-types.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/grafana-oss/references/panels.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/log-inventory/SKILL.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".agents/skills/issue-dev/SKILL.md": {
+      "module": "core",
+      "role": "managed",
+      "render": true
+    },
+    ".agents/skills/loki/SKILL.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/microsoft-docs/SKILL.md": {
+      "module": "skills/dotnet-docs",
+      "role": "managed"
+    },
+    ".agents/skills/opentelemetry/SKILL.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/opentelemetry/references/collector-config.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/opentelemetry/references/instrumentation.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/prometheus/SKILL.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/promql/SKILL.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/promql/references/patterns.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/release/SKILL.md": {
+      "module": "release/tag-flow",
+      "role": "managed"
+    },
+    ".agents/skills/review/SKILL.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".agents/skills/speckit-analyze/SKILL.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".agents/skills/speckit-checklist/SKILL.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".agents/skills/speckit-clarify/SKILL.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".agents/skills/speckit-constitution/SKILL.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".agents/skills/speckit-converge/SKILL.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".agents/skills/speckit-implement/SKILL.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".agents/skills/speckit-market/SKILL.md": {
+      "module": "sdd/speckit",
+      "role": "managed",
+      "render": true
+    },
+    ".agents/skills/speckit-plan/SKILL.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".agents/skills/speckit-specify/SKILL.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".agents/skills/speckit-tasks/SKILL.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".agents/skills/tempo/SKILL.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/tempo/references/architecture-and-operations.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".agents/skills/tempo/references/traceql.md": {
+      "module": "skills/grafana",
+      "role": "managed"
+    },
+    ".claude/hooks/session-start.sh": {
+      "module": "agents/claude-code",
+      "role": "managed",
+      "executable": true,
+      "place": "shell"
+    },
+    ".claude/settings.json": {
+      "module": "agents/claude-code",
+      "role": "json"
+    },
+    ".codex/agents/simplify-reviewer.toml": {
+      "module": "agents/codex",
+      "role": "managed",
+      "place": "shell"
+    },
+    ".codex/config.toml": {
+      "module": [
+        "stands/mcp-stand",
+        "mcp",
+        "stack/dotnet",
+        "stack/node"
+      ],
+      "also": [
+        "agents/codex"
+      ],
+      "role": "block"
+    },
+    ".codex/hooks/session-start.py": {
+      "module": [
+        "agents/codex",
+        "agents/cursor"
+      ],
+      "role": "managed",
+      "place": "shell"
+    },
+    ".codex/rules/harness.rules": {
+      "module": "agents/codex",
+      "role": "managed",
+      "compiled": true,
+      "place": "shell"
+    },
+    ".config/eslint-boundaries.js": {
+      "module": "stack/node",
+      "role": "managed",
+      "place": "shell"
+    },
+    ".config/messages.mjs": {
+      "module": "stack/node",
+      "role": "managed",
+      "place": "shell"
+    },
+    ".cursor/BUGBOT.md": {
+      "module": "agents/cursor",
+      "role": "managed",
+      "place": "shell"
+    },
+    ".cursor/cli.json": {
+      "module": "agents/cursor",
+      "role": "json"
+    },
+    ".cursor/environment.json": {
+      "module": "agents/cursor",
+      "role": "managed",
+      "extend": ".harness/project/setup/snapshot/*.sh и .harness/project/setup/session/*.sh",
+      "place": "shell"
+    },
+    ".cursor/hooks.json": {
+      "module": "agents/cursor",
+      "role": "json"
+    },
+    ".cursor/mcp.json": {
+      "module": [
+        "stands/mcp-stand",
+        "mcp",
+        "stack/dotnet",
+        "stack/node"
+      ],
+      "also": [
+        "agents/cursor"
+      ],
+      "role": "json"
+    },
+    ".cursor/start.sh": {
+      "module": "agents/cursor",
+      "role": "managed",
+      "executable": true,
+      "place": "shell"
+    },
+    ".config/dotnet-tools.json": {
+      "module": "stack/dotnet",
+      "role": "json"
+    },
+    ".csharpierignore": {
+      "module": "stack/dotnet",
+      "role": "seed"
+    },
+    ".editorconfig": {
+      "module": "core",
+      "role": "block",
+      "render": true
+    },
+    ".gitattributes": {
+      "module": "core",
+      "role": "block"
+    },
+    ".githooks/commit-msg": {
+      "module": "githooks/commit-msg",
+      "role": "managed",
+      "executable": true
+    },
+    ".githooks/pre-push": {
+      "module": "githooks/pre-push",
+      "role": "managed",
+      "executable": true
+    },
+    ".github/actions/setup-dotnet/action.yml": {
+      "module": "forge/github",
+      "also": [
+        "stack/dotnet"
+      ],
+      "role": "managed",
+      "place": "shell"
+    },
+    ".github/actions/setup-node/action.yml": {
+      "module": "forge/github",
+      "also": [
+        "stack/node"
+      ],
+      "role": "managed",
+      "place": "shell"
+    },
+    ".github/workflows/alert-triage.yml": {
+      "module": "alert-triage",
+      "also": [
+        "forge/github"
+      ],
+      "role": "managed",
+      "render": true,
+      "place": "shell"
+    },
+    ".github/workflows/check.yml": {
+      "module": "forge/github",
+      "role": "managed",
+      "extend": ".harness/project/ci/check/*.sh и .github/workflows/project-check.yml",
+      "render": true,
+      "place": "shell"
+    },
+    ".github/workflows/close-issues.yml": {
+      "module": "tracker",
+      "also": [
+        "forge/github"
+      ],
+      "role": "managed",
+      "render": true,
+      "place": "shell"
+    },
+    ".github/workflows/code-review.yml": {
+      "module": "review",
+      "also": [
+        "forge/github"
+      ],
+      "role": "managed",
+      "render": true,
+      "place": "shell"
+    },
+    ".github/workflows/project-deploy.yml": {
+      "module": "release/tag-flow",
+      "role": "seed",
+      "render": true,
+      "also": [
+        "forge/github"
+      ]
+    },
+    ".github/workflows/project-check.yml": {
+      "module": "forge/github",
+      "role": "seed",
+      "render": true
+    },
+    ".github/workflows/issue-agent.yml": {
+      "module": "issue-agent",
+      "also": [
+        "forge/github"
+      ],
+      "role": "managed",
+      "render": true,
+      "place": "shell"
+    },
+    ".github/workflows/link-branch.yml": {
+      "module": "tracker/github-issues",
+      "also": [
+        "forge/github"
+      ],
+      "role": "managed",
+      "render": true,
+      "place": "shell"
+    },
+    ".github/workflows/release-cut.yml": {
+      "module": "release/tag-flow",
+      "role": "managed",
+      "render": true,
+      "also": [
+        "forge/github"
+      ],
+      "place": "shell"
+    },
+    ".github/workflows/release.yml": {
+      "module": "release/tag-flow",
+      "role": "managed",
+      "extend": ".github/workflows/project-deploy.yml",
+      "render": true,
+      "also": [
+        "forge/github"
+      ],
+      "place": "shell"
+    },
+    ".github/workflows/review-inputs.yml": {
+      "module": "review",
+      "also": [
+        "forge/github"
+      ],
+      "role": "managed",
+      "render": true,
+      "place": "shell"
+    },
+    ".gitignore": {
+      "module": "core",
+      "role": "block",
+      "render": true
+    },
+    ".gitlab-ci.yml": {
+      "module": "forge/gitlab",
+      "role": "block",
+      "render": true
+    },
+    ".gitlab/ci/agent.yml": {
+      "module": "issue-agent",
+      "also": [
+        "forge/gitlab"
+      ],
+      "role": "managed",
+      "render": true,
+      "place": "shell"
+    },
+    ".gitlab/ci/project-deploy.yml": {
+      "module": "release/tag-flow",
+      "also": [
+        "forge/gitlab"
+      ],
+      "role": "seed"
+    },
+    ".gitlab/ci/project-check.yml": {
+      "module": "forge/gitlab",
+      "role": "seed",
+      "render": true
+    },
+    ".gitlab/ci/events.yml": {
+      "module": "forge/gitlab",
+      "role": "managed",
+      "render": true,
+      "place": "shell"
+    },
+    ".gitlab/ci/harness.yml": {
+      "module": "forge/gitlab",
+      "role": "managed",
+      "extend": ".harness/project/ci/check/*.sh и .gitlab/ci/project-check.yml",
+      "render": true,
+      "place": "shell"
+    },
+    ".gitlab/ci/release-pipeline.yml": {
+      "module": "release/tag-flow",
+      "also": [
+        "forge/gitlab"
+      ],
+      "role": "managed",
+      "extend": ".gitlab/ci/project-deploy.yml",
+      "render": true,
+      "place": "shell"
+    },
+    ".gitlab/ci/release.yml": {
+      "module": "release/tag-flow",
+      "also": [
+        "forge/gitlab"
+      ],
+      "role": "managed",
+      "extend": ".gitlab/ci/project-deploy.yml",
+      "render": true,
+      "place": "shell"
+    },
+    ".gitlab/ci/review-round.yml": {
+      "module": "review",
+      "also": [
+        "forge/gitlab"
+      ],
+      "role": "managed",
+      "render": true,
+      "place": "shell"
+    },
+    ".gitlab/ci/review.yml": {
+      "module": "review",
+      "also": [
+        "forge/gitlab"
+      ],
+      "role": "managed",
+      "place": "shell"
+    },
+    ".gitlab/ci/tracker.yml": {
+      "module": "tracker",
+      "also": [
+        "forge/gitlab"
+      ],
+      "role": "managed",
+      "render": true,
+      "place": "shell"
+    },
+    ".gitleaks.toml": {
+      "module": "secrets/gitleaks",
+      "role": "seed"
+    },
+    ".lsp-mcp.json": {
+      "module": [
+        "stack/dotnet",
+        "stack/node"
+      ],
+      "role": "json"
+    },
+    ".mcp.json": {
+      "module": [
+        "stands/mcp-stand",
+        "mcp",
+        "stack/dotnet",
+        "stack/node"
+      ],
+      "also": [
+        "agents/claude-code"
+      ],
+      "role": "json"
+    },
+    ".harness/README.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/project/area-map.json": {
+      "module": "core",
+      "role": "seed"
+    },
+    ".harness/settings.defaults.env": {
+      "module": "core",
+      "role": "managed",
+      "render": true
+    },
+    ".harness/dotnet/Harness.Build.targets": {
+      "module": "backend/dotnet",
+      "role": "managed",
+      "place": "shell"
+    },
+    ".harness/templates/change/request.md": {
+      "module": "forge",
+      "at": "changeTemplate",
+      "render": true,
+      "role": "managed",
+      "place": "shell"
+    },
+    ".harness/hooks/code-cleanup.ps1": {
+      "module": "stack/dotnet",
+      "role": "managed"
+    },
+    ".harness/hooks/comments-file.sh": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/hooks/eslint-file.sh": {
+      "module": "stack/node",
+      "role": "managed"
+    },
+    ".harness/hooks/forge-text-lint.py": {
+      "module": "forge",
+      "role": "managed"
+    },
+    ".harness/hooks/session-start.sh": {
+      "module": "core",
+      "role": "managed",
+      "extend": ".harness/project/setup/session/*.sh"
+    },
+    ".harness/lib/forge.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/forge.sh": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/github_adapter.py": {
+      "module": [
+        "forge/github",
+        "tracker/github-issues"
+      ],
+      "role": "managed"
+    },
+    ".harness/lib/github_evidence.py": {
+      "module": [
+        "forge/github",
+        "tracker/github-issues"
+      ],
+      "role": "managed"
+    },
+    ".harness/lib/github_transport.py": {
+      "module": [
+        "forge/github",
+        "tracker/github-issues"
+      ],
+      "role": "managed"
+    },
+    ".harness/lib/gitlab_adapter.py": {
+      "module": "forge/gitlab",
+      "role": "managed"
+    },
+    ".harness/lib/hook.sh": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/jira_adapter.py": {
+      "module": "tracker/jira",
+      "role": "managed"
+    },
+    ".harness/lib/manifest.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/manifest.sh": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/messages.sh": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/python.sh": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/agent_links.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/platform_messages.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/rest.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/tracker.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/text_data.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/text_gate.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/mcp-stand/.dockerignore": {
+      "module": "stands/mcp-stand",
+      "role": "managed"
+    },
+    ".harness/mcp-stand/Dockerfile": {
+      "module": "stands/mcp-stand",
+      "role": "managed"
+    },
+    ".harness/mcp-stand/README.md": {
+      "module": "stands/mcp-stand",
+      "role": "managed"
+    },
+    ".harness/mcp-stand/compose.yml": {
+      "module": "stands/mcp-stand",
+      "role": "managed"
+    },
+    ".harness/mcp-stand/dispatcher.py": {
+      "module": "stands/mcp-stand",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/mcp-stand/entry.sh": {
+      "module": "stands/mcp-stand",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/mcp-stand/messages.env": {
+      "module": "stands/mcp-stand",
+      "role": "managed"
+    },
+    ".harness/mcp-stand/messages.py": {
+      "module": "stands/mcp-stand",
+      "role": "managed"
+    },
+    ".harness/mcp-stand/oauth.py": {
+      "module": "stands/mcp-stand",
+      "role": "managed"
+    },
+    ".harness/mcp-stand/policy.py": {
+      "module": "stands/mcp-stand",
+      "role": "managed"
+    },
+    ".harness/mcp-stand/requirements.txt": {
+      "module": "stands/mcp-stand",
+      "role": "managed"
+    },
+    ".harness/mcp-stand/server.py": {
+      "module": "stands/mcp-stand",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/mcp-stand/stand.example.json": {
+      "module": "stands/mcp-stand",
+      "role": "managed"
+    },
+    ".harness/mcp-stand/stand.py": {
+      "module": "stands/mcp-stand",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/mcp-stand/sudoers.template": {
+      "module": "stands/mcp-stand",
+      "role": "managed"
+    },
+    ".harness/messages.env": {
+      "module": "core",
+      "role": "managed",
+      "extend": ".harness/project/messages.env"
+    },
+    ".harness/methodology.json": {
+      "module": "core",
+      "role": "managed",
+      "render": true
+    },
+    ".harness/notify/channels/forge.py": {
+      "module": "notifications/forge",
+      "role": "managed"
+    },
+    ".harness/notify/channels/forge.sh": {
+      "module": "notifications/forge",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/notify/channels/slack.py": {
+      "module": "notifications/slack",
+      "role": "managed"
+    },
+    ".harness/notify/channels/slack.sh": {
+      "module": "notifications/slack",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/notify/notify.py": {
+      "module": "notifications",
+      "role": "managed"
+    },
+    ".harness/notify/notify.sh": {
+      "module": "notifications",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/pipelines.json": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/agent/unattended-codex.md": {
+      "module": [
+        "review",
+        "issue-agent",
+        "alert-triage"
+      ],
+      "role": "managed"
+    },
+    ".harness/prompts/agent/unattended.md": {
+      "module": [
+        "review",
+        "issue-agent",
+        "alert-triage"
+      ],
+      "role": "managed"
+    },
+    ".harness/prompts/agent/alert-triage.md": {
+      "module": "alert-triage",
+      "role": "managed",
+      "render": true
+    },
+    ".harness/prompts/agent/issue.md": {
+      "module": "issue-agent",
+      "role": "managed"
+    },
+    ".harness/prompts/stage/pre-draft-audit.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/stage/audit-output.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/agent/event-reply-retry.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/agent/event-reply.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/review/local-inputs.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/agent/read-only.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/review/output.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/stage/audit.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/stage/execute.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/stage/process-audit.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/agent-step.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/carry.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/claim.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/clarify-answered.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/clarify-wait.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/clarify.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/cleanup.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/command-step.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/commit.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/description.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/draft-stats.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/draft.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/fix.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/implement.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/local-review.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/handoff.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/merge.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/push.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/ready-local.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/ready-unreviewed.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/ready.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/release-accept.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/release-close.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/release-cut.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/release-fix.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/release-fix-review.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/release-fix-checks.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/release-hotfix.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/release-merge-fix.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/release-ready.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/release-wait.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/report.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/review-retry.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/review-wait.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/review.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/sync-base.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/watch.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/wrong-copy.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/review/architecture.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/review/code.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/review/common.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/review/local.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/review/requirements.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/provisioning/lib/dotnet.sh": {
+      "module": "stack/dotnet",
+      "role": "managed"
+    },
+    ".harness/provisioning/lib/pinned-binary.sh": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/provisioning/lib/shell-common.sh": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/provisioning/messages.env": {
+      "module": "core",
+      "role": "managed",
+      "extend": ".harness/project/messages.env"
+    },
+    ".harness/provisioning/patches/lsp-mcp-server-1.1.26.patch": {
+      "module": [
+        "stack/dotnet",
+        "stack/node"
+      ],
+      "role": "managed"
+    },
+    ".harness/provisioning/scripts/cloud-setup.sh": {
+      "module": "core",
+      "role": "managed",
+      "extend": ".harness/project/setup/snapshot/*.sh",
+      "executable": true
+    },
+    ".harness/provisioning/scripts/ensure-agent-cli.sh": {
+      "module": [
+        "review",
+        "issue-agent",
+        "alert-triage"
+      ],
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/provisioning/scripts/ensure-dotnet-sdk.sh": {
+      "module": "stack/dotnet",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/provisioning/scripts/ensure-gitleaks.sh": {
+      "executable": true,
+      "module": "secrets/gitleaks",
+      "role": "managed"
+    },
+    ".harness/provisioning/scripts/ensure-lsp.sh": {
+      "module": [
+        "stack/dotnet",
+        "stack/node"
+      ],
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/provisioning/scripts/ensure-node.sh": {
+      "module": [
+        "stack/node",
+        "review",
+        "issue-agent",
+        "alert-triage"
+      ],
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/provisioning/scripts/ensure-npm.sh": {
+      "module": "stack/node",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/provisioning/scripts/ensure-pwsh.sh": {
+      "module": "stack/dotnet",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/provisioning/scripts/ensure-repo-deps.sh": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/provisioning/scripts/ensure-shellcheck.sh": {
+      "module": "shell/shellcheck",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/provisioning/scripts/ensure-toolchain-profile.sh": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/provisioning/scripts/ensure-vale.sh": {
+      "module": "prose/vale",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/provisioning/scripts/lsp-mcp.mjs": {
+      "module": [
+        "stack/dotnet",
+        "stack/node"
+      ],
+      "role": "managed"
+    },
+    ".harness/provisioning/scripts/messages.mjs": {
+      "module": [
+        "stack/dotnet",
+        "stack/node"
+      ],
+      "role": "managed"
+    },
+    ".harness/provisioning/scripts/toolchain-env.sh": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/review/architecture.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/review/code.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/review/requirements.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/agent/agent-event.py": {
+      "module": "forge",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/agent/agent-run.py": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/agent/agent_lifecycle.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/agent/agent_models.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/agent/agent_permissions.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/agent/agent_provider.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/agent/agent_results.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/agent/agent_runtime.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/agent/alert-triage.py": {
+      "module": "alert-triage",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/areas.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-adr-refs.py": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/text/change_cost.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-agent-permissions.py": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/check-all.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-area-profiles.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-build-diagnostics.py": {
+      "module": "stack/dotnet",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/check-dotnet-format.py": {
+      "module": "stack/dotnet",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/check-comments.py": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/check-commits.py": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/check-diagnostic-integrity.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-doc-symbols.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-docs.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-node-adapter.py": {
+      "module": "stack/node",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-pipeline.py": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/check-pr-issue-link.py": {
+      "module": "tracker",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-pr-size.py": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/check-requirements-registry.py": {
+      "module": "sdd/speckit",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/check-review-label.py": {
+      "module": "review",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-shell.sh": {
+      "module": "shell/shellcheck",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/check-test-budget.py": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/check-harness-files.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-text-registry.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/text/message-inventory.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-tool-pins.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-workflow-names.py": {
+      "module": "forge/github",
+      "role": "managed"
+    },
+    ".harness/scripts/check/check-workflow-shell.py": {
+      "module": "forge",
+      "role": "managed"
+    },
+    ".harness/scripts/ci-common.sh": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/ci_common.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/script_paths.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/text/code_text.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/comment_scan.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/commit-format.sh": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/diagnostic-comments.mjs": {
+      "module": "stack/node",
+      "role": "managed"
+    },
+    ".harness/scripts/check/eslint-adapter.mjs": {
+      "module": "stack/node",
+      "role": "managed"
+    },
+    ".harness/scripts/release/forge-setup.py": {
+      "module": "forge",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/check/generated_sources.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/pipeline/link-branch.py": {
+      "module": "tracker/github-issues",
+      "role": "managed"
+    },
+    ".harness/scripts/messages.env": {
+      "module": "core",
+      "role": "managed",
+      "extend": ".harness/project/messages.env"
+    },
+    ".harness/scripts/agent/permission_policy.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/pipeline/pipeline-run.py": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/pipeline/pipeline_cli.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/pipeline/pipeline_execution.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/pipeline/pipeline_readiness.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/pipeline/pipeline_state.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/review/pr-threads.py": {
+      "module": "forge",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/pipeline/process_cli.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/pipeline/process_config.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/pipeline/process_validation.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/pipeline/gitlab_workflow.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/release/release.py": {
+      "module": "release/tag-flow",
+      "role": "managed"
+    },
+    ".harness/scripts/review/review-local.py": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/review/review-round.py": {
+      "module": "review",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/review/review.schema.json": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/review/review_evidence.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/review/review_inputs.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/review/review_local.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/review/review_round.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/review/review_threads.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/review/review_trust.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/review/review_verdict.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/agent/session-log-digest.py": {
+      "module": [
+        "review",
+        "issue-agent",
+        "alert-triage"
+      ],
+      "role": "managed"
+    },
+    ".harness/scripts/text/session_cost.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/agent/session_log.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/agent/session_results.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/text/shell_text.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/text/text_primitives.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/text/text_scan.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/text/text_templates.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/text/text_forms.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/variables.json": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/change/release-cut.md": {
+      "module": "release/tag-flow",
+      "role": "managed"
+    },
+    ".harness/templates/change/back-merge.md": {
+      "module": "release/tag-flow",
+      "role": "managed"
+    },
+    ".harness/templates/change/kit-upgrade.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/change/description.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/comment/cost.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/comment/round-result.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/comment/alert-episode.md": {
+      "module": "alert-triage",
+      "role": "managed"
+    },
+    ".harness/templates/comment/alert-note.md": {
+      "module": "alert-triage",
+      "role": "managed"
+    },
+    ".harness/templates/comment/close-note.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/comment/merge-note.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/comment/note.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/comment/reply-rejected.md": {
+      "module": "forge",
+      "role": "managed"
+    },
+    ".harness/templates/comment/review-guard.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/comment/review-stalled.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/comment/thread-reply.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/commit/message.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/notify/release.md": {
+      "module": "release/tag-flow",
+      "role": "managed"
+    },
+    ".harness/templates/report/delegated.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/report/pre-draft-audit.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/report/review.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/parts/cost.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/parts/change-stats.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/parts/dev-cost.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/parts/round-stats.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/parts/tokens.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/parts/token-note.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/issue/alert.md": {
+      "module": "alert-triage",
+      "role": "managed"
+    },
+    ".harness/templates/issue/request.md": {
+      "module": "tracker",
+      "at": "issueTemplate",
+      "role": "managed",
+      "place": "shell"
+    },
+    ".harness/templates/issue/task.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/report/session.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/report/simplify.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/review/verdict.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/tool_pins.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/check/vale-lint.py": {
+      "module": "prose/vale",
+      "role": "managed",
+      "executable": true
+    },
+    ".specify/.gitignore": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/extensions.yml": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/extensions/.registry": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/init-options.json": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/integration.json": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/integrations/claude.manifest.json": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/integrations/speckit.manifest.json": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/memory/.constitution-template.json": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/memory/constitution.md": {
+      "module": "sdd/speckit",
+      "role": "seed",
+      "render": true
+    },
+    ".specify/scripts/bash/check-prerequisites.sh": {
+      "module": "sdd/speckit",
+      "role": "managed",
+      "executable": true
+    },
+    ".specify/scripts/bash/common.sh": {
+      "module": "sdd/speckit",
+      "role": "managed",
+      "executable": true
+    },
+    ".specify/scripts/bash/create-new-feature.sh": {
+      "module": "sdd/speckit",
+      "role": "managed",
+      "executable": true
+    },
+    ".specify/scripts/bash/resolve-template.sh": {
+      "module": "sdd/speckit",
+      "role": "managed",
+      "executable": true
+    },
+    ".specify/scripts/bash/setup-plan.sh": {
+      "module": "sdd/speckit",
+      "role": "managed",
+      "executable": true
+    },
+    ".specify/scripts/bash/setup-tasks.sh": {
+      "module": "sdd/speckit",
+      "role": "managed",
+      "executable": true
+    },
+    ".specify/templates/checklist-template.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/templates/constitution-template.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/templates/plan-template.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/templates/spec-template.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/templates/tasks-template.md": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/workflows/speckit/workflow.yml": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".specify/workflows/workflow-registry.json": {
+      "module": "sdd/speckit",
+      "role": "managed"
+    },
+    ".vscode/extensions.json": {
+      "module": "stack/dotnet",
+      "role": "json"
+    },
+    ".vscode/settings.json": {
+      "module": "stack/dotnet",
+      "role": "json"
+    },
+    ".vale.ini": {
+      "module": "prose/vale",
+      "role": "block"
+    },
+    ".vale/styles/HumanizedText/AiArtifacts.yml": {
+      "module": "prose/vale",
+      "role": "managed"
+    },
+    ".vale/styles/HumanizedText/Cliche.yml": {
+      "module": "prose/vale",
+      "role": "managed"
+    },
+    ".vale/styles/HumanizedText/GenericError.yml": {
+      "module": "prose/vale",
+      "role": "managed"
+    },
+    ".vale/styles/HumanizedText/LockTerm.yml": {
+      "module": "prose/vale",
+      "role": "managed"
+    },
+    ".vale/styles/HumanizedText/Colloquial.yml": {
+      "module": "prose/vale",
+      "role": "managed"
+    },
+    ".vale/styles/HumanizedText/ByDefault.yml": {
+      "module": "prose/vale",
+      "role": "managed"
+    },
+    ".vale/styles/HumanizedText/Kancelyarit.yml": {
+      "module": "prose/vale",
+      "role": "managed"
+    },
+    ".vale/styles/HumanizedText/StopWords.yml": {
+      "module": "prose/vale",
+      "role": "managed"
+    },
+    ".vale/styles/HumanizedText/Typography.yml": {
+      "module": "prose/vale",
+      "role": "managed"
+    },
+    ".vale/styles/HumanizedText/Verbosity.yml": {
+      "module": "prose/vale",
+      "role": "managed"
+    },
+    ".vale/styles/Publication/SelfReference.yml": {
+      "module": "prose/vale",
+      "role": "managed"
+    },
+    ".vale/styles/Publication/StubSection.yml": {
+      "module": "prose/vale",
+      "role": "managed"
+    },
+    "AGENTS.md": {
+      "module": "core",
+      "role": "block",
+      "render": true
+    },
+    "CLAUDE.md": {
+      "module": "agents/claude-code",
+      "role": "block"
+    },
+    "CONTRIBUTING.md": {
+      "module": "core",
+      "role": "block",
+      "render": true
+    },
+    "REVIEW.md": {
+      "module": "core",
+      "role": "block"
+    },
+    "docs/README.md": {
+      "module": "core",
+      "role": "block",
+      "render": true
+    },
+    "docs/features/README.md": {
+      "module": "core",
+      "role": "seed"
+    },
+    "docs/platform/adr/README.md": {
+      "module": "core",
+      "role": "block"
+    },
+    "docs/platform/agents/environment.md": {
+      "module": "core",
+      "role": "managed",
+      "place": "reference"
+    },
+    "docs/platform/agents/harness-parameters.md": {
+      "module": "core",
+      "role": "managed",
+      "place": "reference"
+    },
+    "docs/platform/agents/harness.md": {
+      "module": "core",
+      "role": "managed",
+      "place": "reference"
+    },
+    "docs/platform/agents/prompts.md": {
+      "module": "core",
+      "role": "managed",
+      "render": true
+    },
+    "docs/platform/agents/templates.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    "docs/platform/agents/terms.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    "docs/platform/agents/delegated-task.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    "docs/platform/architecture/area-map.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    "docs/platform/architecture/gates.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    "docs/platform/delivery/ci-cd.md": {
+      "module": "core",
+      "role": "managed",
+      "render": true
+    },
+    "docs/platform/delivery/deploy.md": {
+      "module": "release/tag-flow",
+      "role": "seed",
+      "listed": "PARAMETERS.md"
+    },
+    "docs/platform/delivery/sdd.md": {
+      "module": "sdd/speckit",
+      "role": "managed",
+      "render": true
+    },
+    "docs/platform/operations/alerting.md": {
+      "module": "alert-triage",
+      "role": "seed",
+      "listed": "PARAMETERS.md"
+    },
+    "docs/platform/operations/dashboards.md": {
+      "module": "core",
+      "role": "seed",
+      "listed": "PARAMETERS.md"
+    },
+    "docs/platform/operations/local-stack.md": {
+      "module": "core",
+      "role": "seed",
+      "listed": "PARAMETERS.md"
+    },
+    "docs/platform/standards/code-comments.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    "docs/platform/standards/documentation.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    "docs/platform/standards/product-terms.md": {
+      "module": "core",
+      "role": "seed"
+    },
+    "docs/platform/standards/root-entry-docs.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    "docs/platform/standards/test-usefulness.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    "docs/platform/standards/text.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    "specs/README.md": {
+      "module": "sdd/speckit",
+      "role": "seed"
+    },
+    ".harness/vendor/libraries.json": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/authorship.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/commit_text.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/lib/markdown_text.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/vendor/markdown-it-py-LICENSE": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/vendor/mdurl-0.1.2-py3-none-any.whl": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/vendor/markdown_it_py-3.0.0-py3-none-any.whl": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/vendor/markdown-it-py-LICENSE.markdown-it": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/vendor/mdurl-LICENSE": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/review/review_policy.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/hooks/python.cmd": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/lib/executables.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/pipeline/task_workspace.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/pipeline/kit-upgrade.py": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/scripts/pipeline/task-worktree.py": {
+      "module": "core",
+      "role": "managed",
+      "executable": true
+    },
+    ".githooks/reference-transaction": {
+      "module": "githooks/pre-push",
+      "role": "managed",
+      "executable": true
+    },
+    ".githooks/post-merge": {
+      "module": "githooks/pre-push",
+      "role": "managed",
+      "executable": true
+    },
+    ".githooks/post-checkout": {
+      "module": "githooks/pre-push",
+      "role": "managed",
+      "executable": true
+    },
+    ".harness/hooks/python.ps1": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/hooks/agent-gate.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/pipeline/pipeline_next.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".codex/hooks.json": {
+      "module": "agents/codex",
+      "role": "json"
+    },
+    ".harness/lib/agent_hook.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/hooks/agent-deny.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/provisioning/scripts/ensure-docker-mcp.sh": {
+      "executable": true,
+      "module": "mcp/docker",
+      "role": "managed"
+    },
+    ".harness/provisioning/scripts/mcp-launch.mjs": {
+      "module": "mcp",
+      "role": "managed"
+    },
+    ".harness/provisioning/scripts/session-env.sh": {
+      "executable": true,
+      "module": "core",
+      "role": "managed"
+    }
+  }
+}

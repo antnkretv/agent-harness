@@ -1,0 +1,7 @@
+extends: existence
+message: "\"%s\" - в техническом тексте писать lock.json для файла установки или \"блокировка\" для БД"
+scope: text
+level: error
+ignorecase: true
+tokens:
+  - '(?<!\p{L})зам(?:ок|ка|ку|ком|ке|ки|ков|кам|ками|ках)(?!\p{L})'

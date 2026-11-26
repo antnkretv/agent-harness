@@ -1,0 +1,16 @@
+# harness:begin core
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+charset = utf-8
+{{#if stack:dotnet}}
+[*.cs]
+dotnet_diagnostic.IDE0055.severity = none
+{{/if}}
+# harness:end core
+
+# project:begin
+# project:end

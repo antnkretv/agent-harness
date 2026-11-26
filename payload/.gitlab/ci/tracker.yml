@@ -1,0 +1,14 @@
+harness-close-issues:
+  extends: .harness-pipeline-account
+  stage: test
+  image: $HARNESS_CI_IMAGE
+  tags: {{harness.runner.release}}
+  timeout: 10m
+  rules:
+    - if: $CI_COMMIT_BRANCH == "{{git.baseBranch}}" && $CI_PIPELINE_SOURCE == "push"
+  allow_failure:
+    exit_codes: [3]
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - ./.harness/hooks/python.cmd .harness/lib/tracker.py close-merged --sha "$CI_COMMIT_SHA" --before "$CI_COMMIT_BEFORE_SHA"

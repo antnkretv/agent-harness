@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -uo pipefail
+root="$(git rev-parse --show-toplevel)" || exit 1
+git ls-files --error-unmatch .harness/methodology.json >/dev/null 2>&1 \
+  || { git diff --quiet ORIG_HEAD HEAD -- .harness/state/lock.json .harness/project/manifest.json 2>/dev/null \
+       && [ -e "$(git rev-parse --git-path harness/installed.json)" ]; } \
+  || "$(command -v python3 || command -v python)" "$root/.harness/ah.py" install >&2
+. "$root/.harness/scripts/ci-common.sh"
+harness_python "$root/.harness/scripts/pipeline/task-worktree.py" cleanup

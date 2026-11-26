@@ -1,0 +1,21 @@
+{
+  "installation": {
+    "npm": {
+      "typescript-language-server": "6.0.2",
+      "typescript": "6.0.3"
+    }
+  },
+  "servers": [
+    {
+      "id": "typescript",
+      "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+      "languageIds": ["typescript", "typescriptreact", "javascript", "javascriptreact"],
+      "rootPatterns": ["tsconfig.json", "jsconfig.json", "package.json"],
+      "initializationOptions": {
+        "tsserver": {
+          "useSyntaxServer": "never"
+        }
+      }
+    }
+  ]
+}

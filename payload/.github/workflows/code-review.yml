@@ -1,0 +1,439 @@
+name: code-review
+
+on:
+  pull_request_target:
+    types: [labeled, edited]
+  issue_comment:
+    types: [created, edited, deleted]
+  workflow_run:
+    workflows: [review-inputs]
+    types: [completed]
+
+run-name: 'code-review ${{ github.event.label.name }} #${{ github.event.pull_request.number || github.event.issue.number }}'
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  statuses: read
+  actions: read
+
+concurrency:
+  group: >-
+    ${{ (github.event_name == 'pull_request_target'
+          && ((github.event.action == 'labeled' && github.event.label.name == 'run-review')
+              || (github.event.action == 'edited'
+                  && (github.event.changes.title || github.event.changes.body || github.event.changes.base))))
+        && format('code-review-{0}', github.event.pull_request.number)
+        || (github.event_name == 'issue_comment' && github.event.issue.pull_request
+            && github.event.comment.user.type != 'Bot')
+        && format('code-review-{0}', github.event.issue.number)
+        || (github.event_name == 'workflow_run' && github.event.action == 'completed'
+            && github.event.workflow_run.conclusion == 'success'
+            && github.event.workflow_run.path == '.github/workflows/review-inputs.yml'
+            && (github.event.workflow_run.event == 'pull_request_review'
+                || github.event.workflow_run.event == 'pull_request_review_comment')
+            && github.event.workflow_run.pull_requests[0].number > 0
+            && !github.event.workflow_run.pull_requests[1])
+        && format('code-review-{0}', github.event.workflow_run.pull_requests[0].number)
+        || format('code-review-idle-{0}', github.run_id) }}
+  queue: max
+  cancel-in-progress: false
+
+env:
+  AGENT_PROVIDER: '{{harness.extension.ci-agent}}'
+
+jobs:
+  invalidate-inputs:
+    if: >-
+      ${{ (github.event_name == 'pull_request_target' && github.event.action == 'edited'
+          && (github.event.changes.title || github.event.changes.body || github.event.changes.base))
+          || (github.event_name == 'issue_comment' && github.event.issue.pull_request
+              && github.event.comment.user.type != 'Bot')
+          || (github.event_name == 'workflow_run' && github.event.action == 'completed'
+              && github.event.workflow_run.conclusion == 'success'
+              && github.event.workflow_run.path == '.github/workflows/review-inputs.yml'
+              && (github.event.workflow_run.event == 'pull_request_review'
+                  || github.event.workflow_run.event == 'pull_request_review_comment')
+              && github.event.workflow_run.pull_requests[0].number > 0
+              && !github.event.workflow_run.pull_requests[1]) }}
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write
+      issues: read
+      actions: read
+    runs-on: {{harness.runner.review}}
+    timeout-minutes: 5
+    steps:
+      - name: checkout-base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - &secret-slots
+        name: secret-slots
+        id: slots
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/lib/manifest.py --secret-slots tracker --slots 1 >> "$GITHUB_OUTPUT"
+
+      - name: invalidate-inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SECRET_NAME_1: ${{ steps.slots.outputs.secret-1 }}
+          SECRET_VALUE_1: ${{ secrets[steps.slots.outputs.secret-1] }}
+          VAR_NAME_1: ${{ steps.slots.outputs.var-1 }}
+          VAR_VALUE_1: ${{ vars[steps.slots.outputs.var-1] }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+          REVIEW_TRUSTED_PUBLISHER: 'true'
+        run: |
+          if [ -n "$SOURCE_RUN" ]; then
+            "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/agent/agent-event.py invalidate --source-run "$SOURCE_RUN"
+          else
+            "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/agent/agent-event.py invalidate --change "$PR"
+          fi
+
+  prepare:
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write
+      issues: read
+      actions: read
+    if: github.event_name == 'pull_request_target' && github.event.action == 'labeled' && github.event.label.name == 'run-review'
+    runs-on: {{harness.runner.review}}
+    timeout-minutes: 10
+    outputs:
+      run_audit: ${{ steps.prepare.outputs.run_audit }}
+      run_code: ${{ steps.prepare.outputs.run_code }}
+      run_requirements: ${{ steps.prepare.outputs.run_requirements }}
+      run_architecture: ${{ steps.prepare.outputs.run_architecture }}
+    steps:
+      - name: checkout-base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - *secret-slots
+
+      - name: prepare
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SECRET_NAME_1: ${{ steps.slots.outputs.secret-1 }}
+          SECRET_VALUE_1: ${{ secrets[steps.slots.outputs.secret-1] }}
+          VAR_NAME_1: ${{ steps.slots.outputs.var-1 }}
+          VAR_VALUE_1: ${{ vars[steps.slots.outputs.var-1] }}
+          PR: ${{ github.event.pull_request.number }}
+          REVIEW_TRUSTED_PUBLISHER: 'true'
+          AGENT_SECRET: {{#if module:ci-agent/codex}}'true'{{/if}}{{#if module:ci-agent/claude-code}}${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' || secrets.ANTHROPIC_API_KEY != '' }}{{/if}}{{#if module:ci-agent/cursor}}${{ secrets.CURSOR_API_KEY != '' }}{{/if}}
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/review/review-round.py prepare --change "$PR" --outputs --plan .review-round/plan.json
+
+      - name: upload-plan
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: review-plan
+          path: .review-round/plan.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  review:
+    needs: prepare
+    if: needs.prepare.outputs.run_code == 'true'
+    runs-on: {{harness.runner.review}}
+    timeout-minutes: 30
+    outputs:
+      failure_stage_code: ${{ steps.pass.outputs.failure_stage_code }}
+    steps:
+      - name: checkout-base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - *secret-slots
+
+      - &download-plan
+        name: download-plan
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: review-plan
+          path: .review-round
+
+      - name: pass
+        id: pass
+        env: &pass-env
+          GH_TOKEN: ${{ github.token }}
+          SECRET_NAME_1: ${{ steps.slots.outputs.secret-1 }}
+          SECRET_VALUE_1: ${{ secrets[steps.slots.outputs.secret-1] }}
+          VAR_NAME_1: ${{ steps.slots.outputs.var-1 }}
+          VAR_VALUE_1: ${{ vars[steps.slots.outputs.var-1] }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/review/review-round.py pass code --plan .review-round/plan.json --defer-publish
+
+      - &approved
+        name: approved ${{ steps.pass.outputs.approved }}
+        if: steps.pass.outputs.approved != ''
+        run: exit 0
+
+      - name: upload-code-result
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: review-result-code
+          path: |
+            .review-round/code.result.jsonl
+            .review-round/code.result.jsonl.receipt.json
+            .review-round/code.result.jsonl.session.jsonl
+            .review-round/code.stage
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+          overwrite: true
+
+  review-requirements:
+    needs: prepare
+    if: needs.prepare.outputs.run_requirements == 'true'
+    runs-on: {{harness.runner.review}}
+    timeout-minutes: 30
+    outputs:
+      failure_stage_requirements: ${{ steps.pass.outputs.failure_stage_requirements }}
+    steps:
+      - name: checkout-base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - *secret-slots
+
+      - *download-plan
+
+      - name: pass
+        id: pass
+        env: *pass-env
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/review/review-round.py pass requirements --plan .review-round/plan.json --defer-publish
+
+      - *approved
+
+      - name: upload-requirements-result
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: review-result-requirements
+          path: |
+            .review-round/requirements.result.jsonl
+            .review-round/requirements.result.jsonl.receipt.json
+            .review-round/requirements.result.jsonl.session.jsonl
+            .review-round/requirements.stage
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+          overwrite: true
+
+  review-architecture:
+    needs: prepare
+    if: needs.prepare.outputs.run_architecture == 'true'
+    runs-on: {{harness.runner.review}}
+    timeout-minutes: 30
+    outputs:
+      failure_stage_architecture: ${{ steps.pass.outputs.failure_stage_architecture }}
+    steps:
+      - name: checkout-base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - *secret-slots
+
+      - *download-plan
+
+      - name: pass
+        id: pass
+        env: *pass-env
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/review/review-round.py pass architecture --plan .review-round/plan.json --defer-publish
+
+      - *approved
+
+      - name: upload-architecture-result
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: review-result-architecture
+          path: |
+            .review-round/architecture.result.jsonl
+            .review-round/architecture.result.jsonl.receipt.json
+            .review-round/architecture.result.jsonl.session.jsonl
+            .review-round/architecture.stage
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+          overwrite: true
+
+  process-audit:
+    needs: prepare
+    if: needs.prepare.result == 'success' && needs.prepare.outputs.run_audit == 'true'
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      statuses: read
+      checks: read
+      actions: read
+    runs-on: {{harness.runner.review}}
+    timeout-minutes: 90
+    steps:
+      - name: checkout-base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - *secret-slots
+
+      - name: audit-processes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+          SECRET_NAME_1: ${{ steps.slots.outputs.secret-1 }}
+          SECRET_VALUE_1: ${{ secrets[steps.slots.outputs.secret-1] }}
+          VAR_NAME_1: ${{ steps.slots.outputs.var-1 }}
+          VAR_VALUE_1: ${{ vars[steps.slots.outputs.var-1] }}
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/pipeline/pipeline-run.py audit change --change "$PR" --report .review-round/pipeline-audit.json --required-check check
+
+      - name: upload-process-audit
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: review-pipeline-audit
+          path: .review-round/pipeline-audit*
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
+          overwrite: true
+
+  verdict-guard:
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: write
+      issues: read
+      actions: read
+    needs: [prepare, review, review-requirements, review-architecture]
+    if: ${{ !cancelled() && needs.prepare.result != 'skipped' }}
+    runs-on: {{harness.runner.review}}
+    timeout-minutes: 10
+    steps:
+      - name: checkout-base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - *secret-slots
+
+      - name: download-review-artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          pattern: review-*
+          path: .review-round
+          merge-multiple: true
+
+      - name: verdict-guard
+        timeout-minutes: 8
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SECRET_NAME_1: ${{ steps.slots.outputs.secret-1 }}
+          SECRET_VALUE_1: ${{ secrets[steps.slots.outputs.secret-1] }}
+          VAR_NAME_1: ${{ steps.slots.outputs.var-1 }}
+          VAR_VALUE_1: ${{ vars[steps.slots.outputs.var-1] }}
+          PR: ${{ github.event.pull_request.number }}
+          REVIEW_TRUSTED_PUBLISHER: 'true'
+          NEEDS: ${{ toJSON(needs) }}
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/review/review-round.py guard --change "$PR" --prepare-job prepare --plan .review-round/plan.json --publish-deferred
+
+  pipeline-readiness:
+    needs: [prepare, process-audit, verdict-guard]
+    if: ${{ !cancelled() && needs.prepare.result != 'skipped' && needs.process-audit.result != 'skipped' }}
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      statuses: write
+      checks: read
+      actions: read
+    runs-on: {{harness.runner.review}}
+    timeout-minutes: 65
+    steps:
+      - name: checkout-base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - name: download-process-audit
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: review-pipeline-audit
+          path: .review-round
+
+      - *secret-slots
+
+      - name: verify-readiness
+        env:
+          WAIT_MINUTES: ${{ needs.process-audit.result == 'success' && needs.verdict-guard.result == 'success' && 55 || 0 }}
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REVIEW_TRUSTED_PUBLISHER: 'true'
+          SECRET_NAME_1: ${{ steps.slots.outputs.secret-1 }}
+          SECRET_VALUE_1: ${{ secrets[steps.slots.outputs.secret-1] }}
+          VAR_NAME_1: ${{ steps.slots.outputs.var-1 }}
+          VAR_VALUE_1: ${{ vars[steps.slots.outputs.var-1] }}
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/pipeline/pipeline-run.py check-ready change --change "$PR" --report .review-round/pipeline-audit.json --required-check check --ignore-check pipeline-readiness --wait-minutes "$WAIT_MINUTES" --publish-context pipeline/ready

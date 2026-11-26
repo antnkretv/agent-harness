@@ -1,0 +1,18 @@
+# harness:begin core
+default:
+  before_script:
+    - python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+include:
+  - local: .gitlab/ci/harness.yml
+  - local: .gitlab/ci/events.yml
+  - local: .gitlab/ci/project-check.yml
+{{#if module:review}}  - local: .gitlab/ci/review.yml
+{{/if}}{{#if module:issue-agent}}  - local: .gitlab/ci/agent.yml
+{{/if}}{{#if module:tracker}}  - local: .gitlab/ci/tracker.yml
+{{/if}}{{#if module:release}}  - local: .gitlab/ci/release.yml
+{{/if}}
+# harness:end core
+
+# project:begin
+# project:end

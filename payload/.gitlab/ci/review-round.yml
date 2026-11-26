@@ -1,0 +1,167 @@
+workflow:
+  auto_cancel:
+    on_new_commit: none
+
+.review-job:
+  stage: test
+  image: $HARNESS_CI_IMAGE
+  before_script:
+    - python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+  tags: {{harness.runner.review}}
+  variables:
+    AGENT_PROVIDER: '{{harness.extension.ci-agent}}'
+    GIT_DEPTH: "1"
+
+.review-account:
+  extends: .review-job
+  variables:
+    AGENT_SECRET: "true"
+  environment:
+    name: harness
+    action: access
+
+.review-pass:
+  extends: .review-job
+  timeout: 30m
+  environment:
+    name: review-read
+    action: access
+  needs:
+    - job: review-prepare
+      artifacts: true
+  variables:
+    GITLAB_TOKEN: $GITLAB_READ_TOKEN
+  artifacts:
+    when: always
+    expire_in: 7 days
+
+review-prepare:
+  variables:
+    REVIEW_TRUSTED_PUBLISHER: "true"
+  extends: .review-account
+  timeout: 10m
+  resource_group: harness-review-$HARNESS_REVIEW-publish
+  rules:
+    - if: $HARNESS_REVIEW
+  script:
+    - >-
+      ./.harness/hooks/python.cmd .harness/scripts/review/review-round.py prepare --change "$HARNESS_REVIEW" --plan .review-round/plan.json
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - .review-round/plan.json
+
+review:
+  extends: .review-pass
+  rules:
+    - if: $HARNESS_REVIEW
+  script:
+    - >-
+      ./.harness/hooks/python.cmd .harness/scripts/review/review-round.py pass code --plan .review-round/plan.json --defer-publish
+  artifacts:
+    paths: [.review-round/code.result.jsonl, .review-round/code.result.jsonl.receipt.json, .review-round/code.result.jsonl.session.jsonl, .review-round/code.stage]
+
+review-requirements:
+  extends: .review-pass
+  rules:
+    - if: $HARNESS_REVIEW
+  script:
+    - >-
+      ./.harness/hooks/python.cmd .harness/scripts/review/review-round.py pass requirements --plan .review-round/plan.json --defer-publish
+  artifacts:
+    paths: [.review-round/requirements.result.jsonl, .review-round/requirements.result.jsonl.receipt.json, .review-round/requirements.result.jsonl.session.jsonl, .review-round/requirements.stage]
+
+review-architecture:
+  extends: .review-pass
+  rules:
+    - if: $HARNESS_REVIEW
+  script:
+    - >-
+      ./.harness/hooks/python.cmd .harness/scripts/review/review-round.py pass architecture --plan .review-round/plan.json --defer-publish
+  artifacts:
+    paths: [.review-round/architecture.result.jsonl, .review-round/architecture.result.jsonl.receipt.json, .review-round/architecture.result.jsonl.session.jsonl, .review-round/architecture.stage]
+
+review-guard:
+  variables:
+    REVIEW_TRUSTED_PUBLISHER: "true"
+  extends: .review-account
+  timeout: 10m
+  resource_group: harness-review-$HARNESS_REVIEW-publish
+  needs:
+    - job: review-prepare
+      artifacts: true
+    - job: review
+      artifacts: true
+    - job: review-requirements
+      artifacts: true
+    - job: review-architecture
+      artifacts: true
+  rules:
+    - if: $HARNESS_REVIEW
+      when: always
+  script:
+    - >-
+      ./.harness/hooks/python.cmd .harness/scripts/review/review-round.py guard --change "$HARNESS_REVIEW" --prepare-job review-prepare --plan .review-round/plan.json --publish-deferred
+
+review-process-audit:
+  extends: .review-pass
+  timeout: 90m
+  rules:
+    - if: $HARNESS_REVIEW
+  script:
+    - |
+      set -euo pipefail
+      status=0
+      ./.harness/hooks/python.cmd .harness/scripts/review/review-round.py yielded --plan .review-round/plan.json || status=$?
+      if [ "$status" -eq 0 ]; then
+        exit 0
+      elif [ "$status" -ne 1 ]; then
+        exit "$status"
+      fi
+      ./.harness/hooks/python.cmd .harness/scripts/pipeline/pipeline-run.py audit change --change "$HARNESS_REVIEW" --report .review-round/pipeline-audit.json --required-check harness-check
+  artifacts:
+    paths: [.review-round/pipeline-audit*]
+
+review-pipeline-readiness:
+  extends: .review-account
+  timeout: 65m
+  variables:
+    REVIEW_TRUSTED_PUBLISHER: "true"
+  resource_group: harness-review-$HARNESS_REVIEW-publish
+  needs:
+    - job: review-prepare
+      artifacts: true
+    - job: review-process-audit
+      artifacts: true
+    - job: review-guard
+      artifacts: false
+  rules:
+    - if: $HARNESS_REVIEW
+      when: always
+  script:
+    - |
+      set -euo pipefail
+      status=0
+      ./.harness/hooks/python.cmd .harness/scripts/review/review-round.py yielded --plan .review-round/plan.json || status=$?
+      if [ "$status" -eq 0 ]; then
+        exit 0
+      elif [ "$status" -ne 1 ]; then
+        exit "$status"
+      fi
+      ./.harness/hooks/python.cmd .harness/scripts/pipeline/pipeline-run.py check-ready change --change "$HARNESS_REVIEW" --report .review-round/pipeline-audit.json --required-check harness-check --wait-minutes 55 --publish-context pipeline/ready
+
+{{#if module:issue-agent}}
+review-after-round:
+  extends: .review-account
+  timeout: 10m
+  needs:
+    - job: review-pipeline-readiness
+      artifacts: false
+  rules:
+    - if: $HARNESS_REVIEW
+      when: always
+  script:
+    - >-
+      ./.harness/hooks/python.cmd .harness/scripts/agent/agent-event.py after-round --change "$HARNESS_REVIEW"
+{{/if}}

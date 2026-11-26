@@ -1,0 +1,89 @@
+{
+  "change": {
+    "steps": [
+      {
+        "id": "develop",
+        "process": "develop",
+        "requires": []
+      },
+      {
+        "id": "simplification",
+        "process": "simplification",
+        "requires": [
+          "develop"
+        ]
+      },
+      {
+        "id": "verification",
+        "process": "verification",
+        "requires": [
+          "simplification"
+        ]
+      },
+      {
+        "id": "draft-pr",
+        "process": "draft-pr",
+        "requires": [
+          "verification"
+        ]
+      },
+      {
+        "id": "review",
+        "process": "review",
+        "requires": [
+          "draft-pr"
+        ],
+        "transitions": {
+          "changes": {
+            "target": "develop",
+            "maxVisits": 3
+          }
+        }
+      },
+      {
+        "id": "final-gates",
+        "process": "final-gates",
+        "requires": [
+          "review"
+        ]
+      },
+      {
+        "id": "merge",
+        "process": "merge",
+        "requires": [
+          "final-gates"
+        ]
+      }
+    ]
+  },
+  "release": {
+    "steps": [
+      {
+        "id": "cut",
+        "process": "release-cut",
+        "requires": []
+      },
+      {
+        "id": "merge",
+        "process": "release-merge",
+        "requires": [
+          "cut"
+        ]
+      },
+      {
+        "id": "deliver",
+        "process": "release-deliver",
+        "requires": [
+          "merge"
+        ]
+      },
+      {
+        "id": "back-merge",
+        "process": "release-back-merge",
+        "requires": [
+          "deliver"
+        ]
+      }
+    ]
+  }
+}

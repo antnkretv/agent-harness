@@ -1,0 +1,74 @@
+---
+name: dotnet-inspect
+version: 0.26.0
+description: Find and share evidence instead of guessing about .NET packages, libraries, APIs, dependencies, source, performance, and version changes.
+---
+
+# dotnet-inspect
+
+Use dotnet-inspect to find evidence about compiled .NET APIs, packages,
+libraries, dependencies, source, and version changes.
+
+Run `dnx dotnet-inspect -y -- <command-or-target>`. `-y` skips confirmation,
+and `--` passes the remaining arguments to dotnet-inspect. Start by identifying
+the kind of result needed. If the intent or result space is unclear, use a bare
+target and let the router choose. Otherwise, enter the matching space directly.
+
+## Common starts
+
+| Goal | Command |
+| ---- | ------- |
+| Discover or inspect a package | `package query Foo` discovers an exact package ID; use `package query 'Foo.*'` for a literal package-ID prefix. Then use `package <exact-id>` to inspect the known package. |
+| Discover an API symbol | Without an explicit scope, `find` searches installed .NET Runtime, ASP.NET Core, and .NET Standard platform populations, including Microsoft.Extensions assemblies shipped in the framework populations. Try `find JsonSerializer -n 5 --table`, `find ControllerBase -n 5 --table`, or `find OptionsBuilder -n 5 --table`. Package APIs enter scope through explicit `--package Foo@version`, a restored `--project path/to/project`, or `--package-prefix PREFIX` with a type/member pattern: `find IChatClient --package Microsoft.Extensions.AI.Abstractions -n 5 --table` returns `Microsoft.Extensions.AI.IChatClient`. Use `package query Pattern` to discover package IDs; add `--members` for member names. Explicit Package or Platform searches with `--tfm` preserve Find's Markdown, tips, tables, root-array JSON, exact implementation asset, and compatible TFM. |
+| Inspect a type | `type Type --package Foo`; add `--all` for non-public/hidden members. Select `-S Source` for authored-first source with explicit fallback context; `PDB Source` and `Decompiled Source` remain provider-specific views. |
+| Inspect overloads | `member Type --platform Lib -m Name -S "Member Index"` |
+| Select an overload | `member Type --platform Lib Name:1` or `Name~digest` |
+| Correlate one member's Findings | `member Type Method:1 --package Foo -S "Finding Census" --json` returns one receipt-scoped Facts and annotated-source envelope. Load `skill query` for selection and format constraints. |
+| Discover legal query values or demos | `vocabulary -D`; select values with `vocabulary -S Accessibility`, `-S "C# Style Choices" --json`, or `-S "C# Body Kinds"`; use `demo list` for product-home scenarios. |
+| Discover query facets and operators | `library -Q` lists query-capable sections; `type -Q "Body Shapes"` or `library -Q "Performance: Arrays" --json` describes accepted keys and operators without inspection. |
+| Find rendered body syntax | `library path/to.dll --where "Kind=ObjectCreationExpression"`, `type Type --library path/to.dll --where "Kind=InvocationExpression"`, or `member Type Method:1 --library path/to.dll --where "Kind=InvocationExpression"`; load `skill decompiler` for stable kinds and coordinates. |
+| Compare APIs or method bodies | `diff --package Foo@old..new --breaking` (`--additive` new APIs; `--alloc-regressions` for allocation regressions; `--implementation` for the exact `Implementation Diff` section). Single-Library API Diff supports complete Content with unprojected `--json` or the complete service value with `--envelope`; its Share is currently non-projectable. Use `type` or `member ... --match --envelope` when one API coordinate's complete correspondence outcome and diagnostics are the question; ordered match endpoints are also non-projectable. `match Type.MethodA Type.MethodB --package Foo --body` adds C#/IL body differences to the structural result; `match Type.Method --similar --package Foo` ranks structural candidates for discovery. |
+| Trace API evolution | `diff --history --package Foo@old..new --type Type --members --at all`; omit `--at` for full-population evaluation, repeat it for explicit checkpoints, use `--max-probes` for adaptive bisection, add `--sample-percent P` for a deterministic population-relative survey with an optional `--max-probes` cap, or use `--major-versions` for one representative per major. Major-version API history uses the first stable version, with the latest prerelease fallback for preview-only majors; Analysis history uses the latest admitted version per major. |
+| Inspect packages and ecosystems | `package Foo` inspects a known exact package ID; use `package Foo --version 1.2.3` to verify an exact version, `package Foo --versions -n 1` for the newest listed version row, or `package Foo@latest --versions` to force a fresh latest-version check. Use `-D` to discover sections, `-S "Package license files"` to list shipped license documents, and `-S "Signals,Audit: Findings"` to audit text-bearing files and SourceLink mappings. `package activity --ecosystem aspire` scans the named ecosystem's exact package set over the previous 42 days; add `--security-only`, paired exact `--from`/`--through` UTC timestamps, or complete Content `--json`; use `--envelope` for the full service value. Load `skill private-feeds` for custom/authenticated sources. |
+| Query packages | `package query Foo` selects the latest eligible listed version; use `'Foo.*'` for a literal package-ID prefix. The closed nuspec license values are `any`, `MIT`, and `OSMF`; use them with `--where` and `--nuspec-only` to avoid opening archives. Add `--where "library-literal=TEXT" --tfm net11.0` to AND-compose exact decoded-`ldstr` qualification with ordinary terms, then select `-S "Literal Strings"` to itemize physical matches with their Library, Method Token, IL Offset, and complete decoded Literal. The Product planner authors `library-target` from `--tfm`; metadata-expensive queries admit at most five candidates. Final Results retain typed selected-library context, exact Root reopening, and complete occurrences. `-n` and `--rows` select package Results, not occurrences. `--envelope` retains complete `package-query` Content and diagnostics, but Package Query Share is currently non-projectable. |
+| Inspect a Workspace | `workspace --package Foo@version --tfm net11.0`; repeat `--package` to compose ordered Package occurrences, then add inert top-level intent with `--register-library PACKAGE@VERSION/ASSEMBLY@ASSEMBLY_VERSION`, `--register-package-prefix PREFIX`, or `--register-ecosystem ID`. Filter the typed inventory with repeatable `--kind`; `-n` and `--rows` select complete inventory entries after that filter, while `--lines` explicitly selects rendered lines. Restore a current-format canonical packet with `--packet PACKET`; Workspace Definitions realizes its complete context and retained Navigation state before inventory. Exact Package duplicates coalesce; packages without compile assemblies remain members. Use `--verbose` for Package producer/target details and `--share packet` or `--share url` only on top-level inventory. Add `--active-package N` on direct construction for structural hierarchy, Library asset IDs, Type/Member inventory, lenses, and diagnostics. Use `--root-request TOKEN` instead to reopen the exact Root a `package query --where "library-literal=..."` result names; it is refused rather than approximated by package id and version. |
+| Edit a portable Workspace | Use `workspace component list --packet "$w"` to obtain canonical paths. Then use `workspace package add PACKAGE@VERSION --packet "$w"`, `workspace package update packages/ID@VERSION/TFM/RID --packet "$w" --version NEW`, or `workspace package remove packages/ID@VERSION/TFM/RID --packet "$w"`. Edits emit a new packet by default; add and update can select a context or TFM as supported, and update can emit `--json --envelope`. Use `workspace packet encode` or `workspace packet decode` for packet conversion. |
+| Discover or inspect a library | `library Foo` or `library path/to.dll` inspects a known source; use `library query ./bin --where "references=System.Text.Json"` or `library query --platform runtime ...` for Library-grain discovery. Use `-D` to discover sections, `-D --details` to add structural format capabilities, `-S "Library Metrics"` for a whole-library structural report, and `-S "Unsafe Members"` for standalone unsafe evidence. Exact Library `--count` counts public Type declarations; `type Type --library path/to.dll --count` counts Members. Load `skill metadata` for raw ECMA-335 tables/heaps. |
+| Dependencies and relationships | `depends --package Foo@version --tfm net11.0` for a package graph plus declaration evidence; add `-S Dependencies` for evidence only or explicitly select `-S Pruning` to compare direct package candidates with an installed platform inventory. Use `graph calls TYPE MEMBER --root-package Foo@version --root-tfm net11.0` for an external-focused member graph that automatically follows the root package dependencies. Its default baseline highlights third-party Package boundaries; use `--baseline self` or `--baseline nothing` to change that focus. Use `graph libraries --library ./Consumer.dll --library ./Provider.dll -S "Direct Use Clusters"` for exact pairwise call-use clusters. Use `depends Type`, `extensions Type`, or `implements Interface` for type relationships. Positional `depends Type` supports complete Content with `--json` or the complete service value with `--envelope`; asset mode does not support envelopes. Load `skill relationships` for scopes and semantics. |
+
+## Member lookup
+
+Run `find Name` when scope is unknown, inspect the type, then `-S "Member Index"` to list overloads. Select with `Name:N` (1-based) or `Name~digest` (stable). A selected overload defaults to `Signature`. A fully-qualified `Namespace.Type.Member` needs no scope.
+
+## Tips
+
+- `package` and `library` produce terse, token-efficient, high-value domain content by default. Output supports Markdown, tables, TSV, JSONL, and JSON; load `dotnet-inspect skill query` for selection, envelopes, Share URLs, projection, and limits.
+- Add `--project <csproj|dir|project.assets.json>` when project-referenced packages should be in scope; it reads existing restored assets, so restore/build first if dependencies changed.
+- `workspace` reports committed Packages before inert Exact Library, Package Prefix, and Ecosystem registrations; JSON/JSONL retain typed entry arms. It never selects an occurrence implicitly. Copy a Library asset ID, Type full name, and optional Member stable selector from direct `workspace --active-package N`, then add `--lens type.*` or `--lens member.*` for one exact stateless descendant request. Selector failures remain structured; JSON/JSONL retain Library asset ancestry and Member containing-versus-declaring Type joins. Packet input supports inventory and resource-free `--share` re-emission; nested `workspace component` and `workspace package` commands own immutable edits.
+- Common BCL types resolve without scope: `type string`, `type 'List<T>'`. Quote generics and patterns: `member 'Dictionary<TKey,TValue>'`, `-S "Async*"`. Unpinned packages use latest stable; add `--preview` for prerelease APIs.
+
+## Interpret fixed text
+
+- `[Text omitted: required containment]`: a complete value or document was not shared because it carried a text concern; this does not imply malicious intent.
+- `REDACTED`: a URL query or credential-bearing path segment was removed.
+- `<unparsable-url>`: no original locator was shown because an authority-like value could not be parsed into URL components.
+- `<absent>` or `(absent)`: a requested package document was not present; this is not containment or redaction.
+- `\u202E`, `\U0001F600`, `\^[`, and similar backslash forms preserve source text as reversible visual spellings. They are not replacements; do not decode them into live control or format characters before display or persistence.
+
+## Skills
+
+Targeted skills are available for more advanced topics. Print one with `dotnet-inspect skill <name>` when a task needs it, or run `dotnet-inspect skill list` to see them all.
+
+| Skill | Use it for |
+| ----- | ---------- |
+| query | Output formats, -D/-S discovery and selection, -Q query-capability discovery, value projection, @ categories, and output limits shared across commands. |
+| package-skills | Discover and use version-matched agent skills from NuGet packages, and persist selected skills in a repository only when the user explicitly requests it. |
+| private-feeds | Inspect packages from private and custom NuGet feeds safely — select and map sources, use credential providers or explicit configuration, diagnose authentication failures, and reason about source-bound caches and offline operation. |
+| compatibility | Decide whether a change or upgrade is safe — API-surface diffs, behavioral diffs (allocations, exceptions), feature switches, and version resolution. |
+| correctness | Judge whether code is sound and safe to call — its exception surface (throws, catches, exception types) and the unsafe operations in a method body. |
+| signals | Surface a dependency's observable signals — provenance, compatibility, dependency risk, unsafe/PInvoke surface, artifact-text containment, and identifier confusion — to judge how much caution it warrants. Observations, not verdicts. |
+| sourcelink | Inspect source mapped by Portable PDB and SourceLink data — map files and member locations, fetch source, or resolve checksum-matched content locally. |
+| metadata | Query raw ECMA-335 assembly metadata — discover table and heap sections, inspect decoded rows and handles, address table or heap coordinates, and project bounded machine-readable results. |
+| decompiler | Reconstruct a method or type as C# and IL — decompiled source, annotated source with hidden facts, raw IL, fidelity levels, and IL-offset lookup. Use --offline to prohibit package and PDB network acquisition. |
+| performance | Whole-assembly call-graph leverage ranking and performance triage for libraries (experimental). |
+| relationships | Map how code connects — implementors and subclasses, extension methods, dependency graphs, reverse callers, and ecosystem integrations. Many outputs are graph-shaped (add --mermaid). |

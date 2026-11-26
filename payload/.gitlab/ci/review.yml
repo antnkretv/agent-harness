@@ -1,0 +1,14 @@
+harness-review:
+  stage: test
+  rules:
+    - if: $HARNESS_REVIEW && $CI_COMMIT_REF_PROTECTED == "true"
+  resource_group: harness-review-$HARNESS_REVIEW
+  variables:
+    HARNESS_EVENT_PIPELINE: $CI_PIPELINE_ID
+    HARNESS_EVENT_PIPELINE_AT: $CI_PIPELINE_CREATED_AT
+  trigger:
+    include:
+      - local: .gitlab/ci/review-round.yml
+    strategy: depend
+    forward:
+      pipeline_variables: true

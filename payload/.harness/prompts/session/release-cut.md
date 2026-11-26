@@ -1,0 +1,1 @@
+Сессия релиза: открытого release PR в ${ProductionBranch} нет. Срежь релиз командой ./.harness/hooks/python.cmd .harness/scripts/release/release.py cut --push: она создаст ветку релиза от ${BaseBranch} и черновой release PR или назовет, почему срез не нужен. Затем выполни ${GateCommand} --done release-cut: без созданного PR она закончит сессию, с ним назовет следующий шаг.

@@ -1,0 +1,195 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - {{git.releaseBranch}}
+    paths-ignore:
+      - 'docs/**'
+      - '**/docs/**'
+      - '**/.design-sync/**'
+      - 'specs/**'
+      - '.specify/**'
+      - '.claude/**'
+      - '**/.claude/**'
+      - '.cursor/**'
+      - '*.md'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Выложить уже выпущенную версию (откат), например v1.2.3; пусто - релиз головы ветки
+        required: false
+        type: string
+        default: ''
+      major:
+        description: Повысить major
+        type: boolean
+        default: false
+
+run-name: >-
+  Release ${{ inputs.version || github.ref_name }}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: {{harness.runner.release}}
+    timeout-minutes: 10
+    outputs:
+      mode: ${{ steps.plan.outputs.RELEASE_MODE }}
+      tag: ${{ steps.plan.outputs.RELEASE_TAG }}
+      version: ${{ steps.plan.outputs.RELEASE_VERSION }}
+      previous: ${{ steps.plan.outputs.RELEASE_PREVIOUS }}
+      sha: ${{ steps.plan.outputs.RELEASE_SHA }}
+    steps:
+      - &checkout-history
+        name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - &install-kit
+        name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - name: Plan release
+        id: plan
+        env:
+          REF: ${{ github.ref }}
+          VERSION: ${{ inputs.version }}
+          MAJOR: ${{ inputs.major }}
+        run: |
+          set -euo pipefail
+          . .harness/scripts/ci-common.sh
+          if [ "$REF" != "refs/heads/{{git.releaseBranch}}" ]; then
+            annotate error @release_production_ref "{{git.releaseBranch}}" "$REF"
+            exit 1
+          fi
+          args=()
+          [ -z "$VERSION" ] || args+=(--version "$VERSION")
+          [ "$MAJOR" != true ] || args+=(--major)
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/release/release.py next "${args[@]}"
+
+  deploy:
+    needs: plan
+    if: needs.plan.outputs.mode != 'released'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/project-deploy.yml
+    with:
+      sha: ${{ needs.plan.outputs.sha }}
+      version: ${{ needs.plan.outputs.version }}
+      mode: ${{ needs.plan.outputs.mode }}
+    secrets: inherit
+
+  tag:
+    needs: [plan, deploy]
+    if: needs.plan.outputs.mode == 'release'
+    runs-on: {{harness.runner.release}}
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - name: Tag the release
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          SHA: ${{ needs.plan.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/lib/forge.py tag "$TAG" "$SHA"
+
+  back-merge:
+    needs: [plan, tag]
+    if: needs.plan.outputs.mode == 'release'
+    runs-on: {{harness.runner.release}}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - *checkout-history
+      - *install-kit
+
+      - name: Resolve release token
+        id: token
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/lib/manifest.py --secret-slots release/tag-flow --slots 1 >> "$GITHUB_OUTPUT"
+
+      - name: Open back-merge PR
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          SHA: ${{ needs.plan.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+          SECRET_NAME_1: ${{ steps.token.outputs.secret-1 }}
+          SECRET_VALUE_1: ${{ secrets[steps.token.outputs.secret-1] }}
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/release/release.py back-merge --release-token --tag "$TAG" --ref "$SHA"
+
+  report:
+    needs: [plan, deploy, tag, back-merge]
+    if: always() && needs.plan.result == 'success' && needs.plan.outputs.mode != 'released'
+    runs-on: {{harness.runner.release}}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - *checkout-history
+      - *install-kit
+
+      - name: Report release
+        id: report
+        env:
+          MODE: ${{ needs.plan.outputs.mode }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          PREVIOUS: ${{ needs.plan.outputs.previous }}
+          SHA: ${{ needs.plan.outputs.sha }}
+          R_DEPLOY: ${{ needs.deploy.result }}
+          R_TAG: ${{ needs.tag.result }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/release/release.py report --mode "$MODE" --tag "$TAG" --previous "$PREVIOUS" \
+            --ref "$SHA" --deploy "$R_DEPLOY" --tagged "$R_TAG" --body-file "$RUNNER_TEMP/release-report.md"
+{{#if module:notifications}}
+      - name: Resolve notification secrets
+        id: channels
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/notify/notify.py secrets >> "$GITHUB_OUTPUT"
+
+      - name: Notify
+        env:
+          NOTIFY_KIND: release
+          NOTIFY_TITLE: ${{ steps.report.outputs.title }}
+          NOTIFY_STATUS: ${{ steps.report.outputs.status }}
+          SECRET_NAME_1: ${{ steps.channels.outputs.secret-1 }}
+          SECRET_VALUE_1: ${{ secrets[steps.channels.outputs.secret-1] }}
+        run: |
+          set -euo pipefail
+          for slot in "${!SECRET_NAME_@}"; do
+            value="SECRET_VALUE_${slot#SECRET_NAME_}"
+            [ -z "${!slot}" ] || export "${!slot}=${!value}"
+            unset "$value"
+          done
+          NOTIFY_BODY=$(cat "$RUNNER_TEMP/release-report.md")
+          export NOTIFY_BODY
+          .harness/notify/notify.sh
+{{/if}}
+      - name: Release outcome
+        env:
+          FAILED: ${{ steps.report.outputs.failed }}
+        run: '[ -z "$FAILED" ]'

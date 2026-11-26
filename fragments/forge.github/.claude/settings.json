@@ -1,0 +1,27 @@
+{
+	"hooks": {
+		"PreToolUse": [
+			{
+				"hooks": [
+					{
+						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/hooks/forge-text-lint.py\" claude",
+						"statusMessage": "Проверка текста перед отправкой в GitHub (Vale)...",
+						"timeout": 60,
+						"type": "command"
+					}
+				],
+				"matcher": "mcp__github__.*"
+			},
+			{
+				"hooks": [
+					{
+						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/hooks/agent-gate.py\" claude tool",
+						"timeout": 60,
+						"type": "command"
+					}
+				],
+				"matcher": "mcp__github__update_pull_request"
+			}
+		]
+	}
+}

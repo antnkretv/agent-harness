@@ -1,0 +1,81 @@
+variables:
+  HARNESS_CI_IMAGE: python:3.13-bookworm
+
+workflow:
+  rules:
+    - if: $HARNESS_PIPELINE || $HARNESS_RELEASE
+      auto_cancel:
+        on_new_commit: none
+{{#if module:tracker}}    - if: $CI_COMMIT_BRANCH == "{{git.baseBranch}}" && $CI_PIPELINE_SOURCE == "push"
+      auto_cancel:
+        on_new_commit: none
+{{/if}}    - when: always
+
+.harness-pipeline-account:
+  environment:
+    name: harness
+    action: access
+
+.harness-agent-account:
+  environment:
+    name: harness-agent
+    action: access
+  variables:
+    GITLAB_TOKEN: $AGENT_GITLAB_TOKEN
+
+.harness-toolchain:
+  before_script:
+    - python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+    - |
+      set -euo pipefail
+      scripts=.harness/provisioning/scripts
+      solution=$(./.harness/hooks/python.cmd .harness/lib/manifest.py project/manifest.json .modules.backend.extensions.dotnet.solution || true)
+      if [ -n "$solution" ]; then
+        bash "$scripts/ensure-dotnet-sdk.sh"
+      fi
+      if [ -f .node-version ]; then
+        bash "$scripts/ensure-node.sh"
+        . "$scripts/toolchain-env.sh"
+        bash "$scripts/ensure-npm.sh"
+      fi
+      for tool in vale shellcheck gitleaks; do
+        if [ -f "$scripts/ensure-$tool.sh" ]; then
+          bash "$scripts/ensure-$tool.sh"
+        fi
+      done
+      . "$scripts/toolchain-env.sh"
+      if [ -n "${AGENT_PROVIDER:-}" ]; then
+        harness_ensure_agent_cli "$AGENT_PROVIDER"
+      fi
+
+harness-check:
+  extends: .harness-toolchain
+  stage: test
+  image: $HARNESS_CI_IMAGE
+  tags: {{harness.runner.check}}
+  timeout: 60m
+  interruptible: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "web" && $HARNESS_REVIEW == null && $HARNESS_AGENT == null && $HARNESS_PIPELINE == null
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - |
+      set -euo pipefail
+      policy="$(./.harness/hooks/python.cmd .harness/lib/manifest.py project/manifest.json .git.baseBranch)"
+      target_branch="${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-$policy}"
+      base_branch="$target_branch"
+      case "${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME:-}" in release/*) base_branch="$policy" ;; esac
+      for branch in "$base_branch" "$target_branch"; do
+        git fetch --no-tags origin "+refs/heads/$branch:refs/remotes/origin/$branch"
+      done
+      export HARNESS_BASE="origin/$base_branch" HARNESS_TARGET="origin/$target_branch"
+      scope=()
+      for step in .harness/project/ci/check/*.sh; do
+        [ -f "$step" ] || continue
+        bash "$step" </dev/null
+        scope=(--gates-only)
+      done
+      [ "$HARNESS_TARGET" = "$HARNESS_BASE" ] || scope+=(--since "$HARNESS_TARGET")
+      ./.harness/hooks/python.cmd .harness/scripts/check/check-all.py --base "$HARNESS_BASE" ${scope[@]+"${scope[@]}"}

@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": "./.harness/hooks/python.cmd .harness/hooks/forge-text-lint.py cursor",
+        "timeout": 60
+      }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+harness-event:
+  extends: .harness-pipeline-account
+  stage: test
+  image: $HARNESS_CI_IMAGE
+  tags: {{harness.runner.check}}
+  timeout: 10m
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+  variables:
+    GIT_DEPTH: "1"
+  script:
+    - >-
+      ./.harness/hooks/python.cmd .harness/scripts/agent/agent-event.py route
+{{#if module:review}}
+harness-invalidate:
+  extends: .harness-pipeline-account
+  stage: test
+  image: $HARNESS_CI_IMAGE
+  tags: {{harness.runner.review}}
+  timeout: 10m
+  resource_group: harness-review-$HARNESS_INVALIDATE-publish
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "api" && $CI_COMMIT_REF_PROTECTED == "true" && $HARNESS_INVALIDATE =~ /^[1-9][0-9]*$/
+  variables:
+    GIT_DEPTH: "1"
+    REVIEW_TRUSTED_PUBLISHER: "true"
+  script:
+    - >-
+      ./.harness/hooks/python.cmd .harness/scripts/agent/agent-event.py invalidate --change "$HARNESS_INVALIDATE"
+{{/if}}

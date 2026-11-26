@@ -1,0 +1,112 @@
+"""Установка, обновление и проверка harness в репозитории проекта.
+
+Установщик живет только в архиве комплекта и в проект не ставится. Порядок действий и критерии
+готовности - AGENT.md комплекта, устройство установленного слоя - docs/platform/agents/harness.md.
+
+    ./payload/.harness/hooks/python.cmd ah.py init --target <repo> --next  # подключение проекта: configure, затем apply
+    ./payload/.harness/hooks/python.cmd ah.py configure --target <repo> --next  # следующий вопрос настройки JSON
+    ./payload/.harness/hooks/python.cmd ah.py configure --target <repo> --answer <id>=<значение> --next
+    ./payload/.harness/hooks/python.cmd ah.py pack --config <манифест или config.json> --out <каталог>  # архив под решения
+    ./payload/.harness/hooks/python.cmd ah.py apply --target <repo> [--archive <архив этой сборки>]
+    ./payload/.harness/hooks/python.cmd ah.py install --target <repo>   # файлы комплекта версии из lock.json; обычно через .harness/ah.py
+    python3 .harness/ah.py upgrade [--version <версия>]                 # новая версия: ветка, apply, lock, PR
+    ./payload/.harness/hooks/python.cmd ah.py verify --target <repo>    # приемка: параметры, реестр, гейты, пробы
+    ./payload/.harness/hooks/python.cmd ah.py status --target <repo>    # файлы комплекта, которые apply перезапишет
+    ./payload/.harness/hooks/python.cmd ah.py doctor --target <repo>    # зависимости комплекта против машины
+"""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+
+from .archive import pack
+from .catalog import load_catalog
+from .configure import configure
+from .install import apply
+from .lifecycle import init, upgrade
+from .lock_install import install
+from .resources import Refusal, kit_root
+from .review import providers, review
+from .verify import doctor, status, verify
+
+
+def workspace(args: argparse.Namespace) -> int:
+    script = kit_root() / "payload/.harness/scripts/pipeline/task-worktree.py"
+    command = [sys.executable, str(script), "start", "--root", args.target, "--base", args.base, "--type", "chore", "--key", args.key]
+    return subprocess.run(command, check=False).returncode
+
+
+def asking(command: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    command.add_argument("--next", action="store_true", help="напечатать следующий вопрос JSON")
+    command.add_argument("--answer", action="append", default=[], metavar="ID=VALUE",
+                         help="ответ владельца на вопрос; повторяется")
+    command.add_argument("--set", action="append", default=[], metavar="ID=VALUE",
+                         help="факт проекта, определенный агентом по rule; решение так не задается; повторяется")
+    command.add_argument("--reopen", action="append", default=[], metavar="MODULE|ID",
+                         help="спросить заново модуль или один ответ, например apps.<приложение>.check; повторяется")
+    return command
+
+
+def arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    commands = parser.add_subparsers(dest="command", required=True)
+    configured_command = asking(commands.add_parser("configure", help="вопросы настройки и манифест проекта по ответам"))
+    configured_command.set_defaults(handler=configure)
+    initialized = asking(commands.add_parser("init", help="подключить проект: вопросы настройки, затем оболочка, манифест и lock"))
+    initialized.add_argument("--archive", help="архив этой версии; без него init скачивает архив выпуска")
+    initialized.set_defaults(handler=init)
+    upgraded = commands.add_parser("upgrade", help="новая версия комплекта: ветка задачи, apply новой версией, lock и PR")
+    upgraded.add_argument("--version", help="версия выпуска; без нее - последний выпуск")
+    upgraded.add_argument("--new-archive", help="архив новой версии вместо скачивания выпуска; --archive забирает загрузчик")
+    upgraded.add_argument("--base", help="база ветки и PR; без нее - git.baseBranch манифеста")
+    upgraded.add_argument("--no-pr", action="store_true", help="обновить рабочую копию на месте, без ветки и PR")
+    upgraded.set_defaults(handler=upgrade)
+    packed = commands.add_parser("pack", help="архив комплекта под решения манифеста или config.json")
+    packed.add_argument("--config", required=True, help="манифест проекта или config.json с решениями")
+    packed.add_argument("--out", default=".", help="каталог архива")
+    packed.set_defaults(handler=pack)
+    allocated = commands.add_parser("workspace", help="allocate a worktree before installation or upgrade")
+    allocated.add_argument("--base", required=True, help="origin/<branch>, or refs/heads/<branch> without a forge")
+    allocated.add_argument("--key", default="harness-install", help="stable installation or upgrade task key")
+    allocated.set_defaults(handler=workspace)
+    reviewed = commands.add_parser("review", help="prepare or collect first-install review from a checksum-pinned external kit")
+    reviewed.add_argument("--archive", required=True, help="trusted external .tar.gz; obtain its checksum outside the PR")
+    reviewed.add_argument("--sha256", required=True, help="out-of-band SHA-256 of the entire trusted archive")
+    reviewed.add_argument("--pr", required=True, type=int)
+    reviewed.add_argument("--base", default="origin/develop")
+    reviewed.add_argument("--work", required=True, help="private packet directory outside the consumer")
+    reviewed.add_argument("--provider", choices=providers(load_catalog()), required=True)
+    reviewed.add_argument("--reason", default="unavailable", help="ключ причины локального круга из LocalReason реестра шаблонов")
+    reviewed.add_argument("--context", default="")
+    reviewed.add_argument("--pass", dest="passes", action="append")
+    reviewed.add_argument("--collect", action="store_true")
+    reviewed.set_defaults(handler=review)
+    applied = commands.add_parser("apply", help="установить или обновить harness")
+    applied.add_argument("--dry-run", action="store_true", help="показать план без записи")
+    applied.add_argument("--archive", help="архив этой сборки: его sha256 пишется в lock.json, а сам он - в кеш версий")
+    applied.add_argument("--source", help="каталог исходника комплекта в проекте: загрузчик собирает из него архив, если версии нет в кеше; пустое значение снимает")
+    applied.set_defaults(handler=apply)
+    commands.add_parser("install", help="поставить файлы комплекта версии из lock.json в рабочую копию").set_defaults(handler=install)
+    verified = commands.add_parser("verify", help="приемка установки")
+    verified.add_argument("--no-gates", action="store_true", help="без гейтов дерева и проб: этапы 1 и 2 установки")
+    verified.add_argument("--no-probes", action="store_true", help="без отрицательных проб гейтов")
+    verified.set_defaults(handler=verify)
+    commands.add_parser("status", help="файлы и блоки комплекта, разошедшиеся с версией комплекта: apply их перезапишет").set_defaults(handler=status)
+    doctored = commands.add_parser("doctor", help="зависимости комплекта против машины")
+    doctored.add_argument("--ci", action="store_true", help="зависимости CI обязательны")
+    doctored.set_defaults(handler=doctor)
+    for command in commands.choices.values():
+        if command is not packed:
+            command.add_argument("--target", default=".", help="корень репозитория проекта")
+    return parser.parse_args()
+
+
+def main() -> int:
+    try:
+        args = arguments()
+        return args.handler(args)
+    except Refusal as refusal:
+        print(str(refusal), file=sys.stderr)
+        return 2

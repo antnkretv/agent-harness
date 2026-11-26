@@ -1,0 +1,43 @@
+{
+  "stand": "app-production",
+  "title": "app-production",
+  "allow_write": false,
+  "access": {
+    "mode": "ssh",
+    "host": "192.0.2.10",
+    "port": 22,
+    "user": "mcp-app-production",
+    "key": "/config/id_ed25519",
+    "known_hosts": "/config/known_hosts"
+  },
+  "docker_network": "app-production",
+  "telemetry": {
+    "prometheus": {"kind": "prometheus", "url": "docker://app-production-prometheus-1:9090"},
+    "loki": {"kind": "loki", "url": "docker://app-production-loki-1:3100"},
+    "tempo": {"kind": "tempo", "url": "docker://app-production-tempo-1:3200"},
+    "grafana": {"kind": "grafana", "url": "http://192.0.2.10:3000", "token_env": "GRAFANA_TOKEN"},
+    "alertmanager": {"kind": "alertmanager", "url": "docker://app-production-alertmanager-1:9093"},
+    "collector": {"kind": "collector", "url": "docker://app-production-collector-1:8888"},
+    "collector-health": {"kind": "collector", "url": "docker://app-production-collector-1:13133"}
+  },
+  "host": {
+    "units": ["docker", "containerd"],
+    "backups": {"directory": "/var/backups/app-production", "marks": ["last-success", "last-offsite-success"]}
+  },
+  "workloads": {
+    "docker": true,
+    "kubernetes": {"command": ["kubectl"], "namespaces": ["app-production"], "default": "app-production"}
+  },
+  "repository": "/config/repository.zip",
+  "state": "/state",
+  "public_url": "https://mcp.example.com",
+  "listen": {"host": "127.0.0.1", "port": 8740},
+  "allowed_hosts": ["mcp.example.com", "127.0.0.1:8740"],
+  "allowed_origins": ["https://mcp.example.com"],
+  "oauth": {
+    "password_salt": "0000000000000000000000000000000000000000000000000000000000000000",
+    "password_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "redirect_schemes": ["cursor"]
+  },
+  "static_tokens_env": "STAND_TOKENS"
+}

@@ -1,0 +1,29 @@
+name: mcp-stand-${STAND:?}
+
+services:
+  mcp:
+    build: .
+    image: mcp-stand:local
+    container_name: mcp-stand-${STAND:?}
+    restart: unless-stopped
+    network_mode: ${STAND_NETWORK_MODE:-host}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    read_only: true
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 64
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    volumes:
+      - type: bind
+        source: ${STAND_CONFIG_DIR:?}
+        target: /config
+        read_only: true
+      - state:/state
+
+volumes:
+  state:
+    name: mcp-stand-${STAND:?}-state

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+# shellcheck source=../.harness/scripts/ci-common.sh
+. "$root/.harness/scripts/ci-common.sh"
+
+base="$(harness_python "$root/.harness/scripts/pipeline/task-worktree.py" check --push --print-base | tr -d '\r')"
+if [ -z "$base" ]; then
+  base="origin/$(manifest_get '.git.baseBranch' 'develop')"
+fi
+if git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
+  git diff --check "$base"...HEAD
+fi

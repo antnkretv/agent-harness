@@ -1,0 +1,41 @@
+name: Deploy
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+      mode:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  MSG_deploy_wf_not_connected: 'Выкладка проекта не подключена: релиз %s не выложен и тега не получит. Задание deploy в .github/workflows/project-deploy.yml заменяет проект.'
+
+jobs:
+  deploy:
+    runs-on: {{harness.runner.release}}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.sha }}
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - name: Deploy
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          . .harness/scripts/ci-common.sh
+          annotate error @deploy_wf_not_connected "$VERSION"
+          exit 1

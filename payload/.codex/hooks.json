@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.harness/hooks/python.cmd .harness/hooks/agent-gate.py codex prompt",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.harness/hooks/python.cmd .harness/hooks/agent-gate.py codex tool",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.harness/hooks/python.cmd .harness/hooks/agent-gate.py codex stop",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
+  }
+}

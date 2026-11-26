@@ -1,0 +1,9 @@
+**/Migrations/**
+*.csproj
+*.props
+*.targets
+*.[Cc]onfig
+*.xml
+*.xaml
+*.axaml
+.sessions/

@@ -1,0 +1,21 @@
+name: Setup Node.js
+description: Node из .node-version и npm из devEngines корневого package.json.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v6
+      with:
+        node-version-file: .node-version
+        cache: ''
+        package-manager-cache: false
+
+    - shell: bash
+      run: bash "$GITHUB_WORKSPACE/.harness/provisioning/scripts/ensure-npm.sh"
+
+    - if: runner.environment == 'github-hosted'
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-npm-

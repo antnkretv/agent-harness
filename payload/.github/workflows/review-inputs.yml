@@ -1,0 +1,17 @@
+name: review-inputs
+
+on:
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions: {}
+
+jobs:
+  signal:
+    runs-on: {{harness.runner.check}}
+    timeout-minutes: 1
+    steps:
+      - name: review-input-event
+        run: 'true'

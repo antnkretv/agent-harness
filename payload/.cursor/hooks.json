@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "hooks": {
+    "workspaceOpen": [
+      {
+        "command": "./.harness/hooks/python.cmd .harness/lib/agent_links.py",
+        "timeout": 60
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "./.harness/hooks/python.cmd .codex/hooks/session-start.py",
+        "timeout": 900
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "./.harness/hooks/python.cmd .harness/hooks/agent-deny.py cursor",
+        "failClosed": true
+      },
+      {
+        "command": "./.harness/hooks/python.cmd .harness/hooks/agent-gate.py cursor tool",
+        "timeout": 60
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "./.harness/hooks/python.cmd .harness/hooks/agent-gate.py cursor prompt",
+        "timeout": 60
+      }
+    ],
+    "stop": [
+      {
+        "command": "./.harness/hooks/python.cmd .harness/hooks/agent-gate.py cursor stop",
+        "timeout": 180,
+        "loop_limit": 50
+      }
+    ]
+  }
+}
