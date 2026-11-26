@@ -63,9 +63,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         # Опубликованный архив уже закреплен в lock проектов, а байты сжатия зависят от раннера: повтор
         # не перезаписывает файл выпуска, а догружает недостающий, sha256 считает по опубликованному архиву и
-        # публикует выпуск, если прерванное задание оставило его черновиком.
+        # публикует выпуск, если прерванное задание оставило его черновиком. Черновик, который тег еще не
+        # создал, с другого коммита пересоздается: его файлы проектам недоступны.
         run: |
           set -euo pipefail
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            target="$(gh release view "$TAG" --json targetCommitish --jq .targetCommitish)"
+            if [ "$target" != "$GITHUB_SHA" ]; then
+              if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]; then
+                echo "::error::выпуск $TAG опубликован с коммита $target: поднимите version в kit.json"; exit 1
+              fi
+              gh release delete "$TAG" --yes
+            fi
+          fi
           if ! gh release view "$TAG" > /dev/null 2>&1; then
             gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 --target "$GITHUB_SHA" --title "$TAG" --generate-notes
             exit 0
