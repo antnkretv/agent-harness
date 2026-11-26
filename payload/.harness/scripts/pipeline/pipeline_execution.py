@@ -189,7 +189,8 @@ class Pipeline:
             if mark:
                 marks.append(mark)
         marks.reverse()
-        routes = review_policy.route(marks, list(files), change.head_sha, change.base_sha, policy, task)
+        routes = review_policy.route(marks, list(files), change.head_sha, change.base_sha, policy, task,
+                                    change.fetch_ref, change.base)
         if not routes:
             raise Blocked(msg('runtime_no_mandatory_review_passes_configured'))
         states = forge.commit_results(change.head_sha)

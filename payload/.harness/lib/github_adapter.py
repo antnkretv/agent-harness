@@ -411,6 +411,10 @@ class GitHubForge(forge.Forge):
                      for status in self.commit_results(sha).values())
         return found
 
+    def jobs(self, sha: str) -> list[forge.Check]:
+        latest = {check.name: check for check in self.checks(sha) if check.kind == "job"}
+        return list(latest.values())
+
     def job_log(self, job: str) -> str:
         found = JOB.search(job.strip())
         if not found:

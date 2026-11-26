@@ -96,6 +96,14 @@ BASE_BRANCH = "origin/" + get("git.baseBranch", "develop")
 CUT_PREFIX, BACK_PREFIX = "release/", "back-merge/"
 
 
+GIT_LOW_SPEED = (("http.lowSpeedLimit", "1024"), ("http.lowSpeedTime", "60"))
+
+
+def git_auth() -> dict | None:
+    forge = importlib.import_module("forge")
+    return forge.git_env() if forge.name and any(os.environ.get(name) for name in forge.token_names) else None
+
+
 def head_checks(head: str) -> dict:
     forge = importlib.import_module("forge")
     found = forge.commit_results(head)

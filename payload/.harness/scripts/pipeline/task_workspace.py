@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import sys
 
-from ci_common import forge, get, install_kit, msg, record_files, release_flow, tracker
+from ci_common import forge, get, git_auth, install_kit, msg, record_files, release_flow, tracker
 from authorship import agent_commit, session_agent
 from manifest import extensions
 from tracker import COMMIT_TYPES, branch_name, slug_of, valid_slug
@@ -46,7 +46,7 @@ MOUNT_POINT = 0xA0000003
 
 @lru_cache(maxsize=1)
 def authorized() -> dict | None:
-    return forge.git_env() if forge.name and any(os.environ.get(name) for name in forge.token_names) else None
+    return git_auth()
 
 
 def git(root: Path, *args: str, optional: bool = False) -> str:

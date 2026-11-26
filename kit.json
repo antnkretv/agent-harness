@@ -4,7 +4,7 @@
     "Формат - PARAMETERS.md, сопровождение - MAINTAINING.md."
   ],
   "name": "agent-harness",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "repository": "https://github.com/antnkretv/agent-harness",
   "released": [
     ".vale/styles/config/views/CSharpMessages.yml",
@@ -2847,6 +2847,26 @@
     },
     ".harness/provisioning/scripts/session-env.sh": {
       "executable": true,
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/gates-wait.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/gates-fix.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/prompts/session/gates-missing.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/scripts/review/post_approval.py": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/templates/parts/change-fixes.md": {
       "module": "core",
       "role": "managed"
     }

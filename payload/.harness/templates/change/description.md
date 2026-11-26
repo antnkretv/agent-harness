@@ -2,4 +2,6 @@ ${ChangeBody}
 
 ${ChangeIssues}
 
+${ChangeFixes}
+
 ${ChangeStats}

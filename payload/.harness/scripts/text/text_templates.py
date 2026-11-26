@@ -47,7 +47,7 @@ FIELDS = {"about", "form", "part", "prompt", "required", "values"}
 PARTS = "parts/"
 CALL = re.compile(r"""\btext_templates\.render\(\s*["']([^"']+)["']""")
 COMMAND = re.compile(r"\btext_templates\.py render ([a-z0-9-]+/[a-z0-9-]+)")
-RUNTIME = {"ChangeLink", "SHA", "ChangeIssues", "ChangeStats", "SessionLink", "SessionModel"}
+RUNTIME = {"ChangeLink", "SHA", "ChangeIssues", "ChangeFixes", "ChangeStats", "SessionLink", "SessionModel"}
 PUBLISHED = ("comment/", "issue/")
 DESCRIPTION = "change/description"
 COMMIT = "commit/message"
@@ -414,6 +414,16 @@ def runtime(args: argparse.Namespace, used: set[str]) -> tuple[dict[str, str], d
         if links:
             found["ChangeIssues"] = "\n".join(tracker.link_phrase(key, closing)
                                               for closing in (True, False) for key in links if links[key] is closing)
+    if "ChangeFixes" in used and args.change is not None:
+        import post_approval
+
+        try:
+            fixes = post_approval.accepted(args.change)
+        except RuntimeError as error:
+            raise ValueError(str(error)) from None
+        if fixes:
+            found["ChangeFixes"] = render("parts/change-fixes", {
+                "FixCommits": "\n".join(f"- {sha[:9]} {subject}" for sha, subject in fixes)})
     if "ChangeStats" in used and (args.session or published):
         try:
             kept = change_cost.kept(published) if published else None

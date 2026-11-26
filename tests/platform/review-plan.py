@@ -187,6 +187,142 @@ report("слова у локального круга те же", {ok_word, bloc
 report("слово правок у маршрутизатора то же", True, block_word in plan.CHANGES.pattern)
 report("слово апрува у маршрутизатора то же", True, ok_word in plan.APPROVE.pattern)
 
+# Правка после апрува всех проходов: без нового круга проходит только маленькая
+# правка файлов, которые назвал упавший Check, или файлов сборки и тестов.
+import subprocess
+import tempfile
+
+import post_approval
+
+
+def committed(repo: str, files: dict[str, str], message: str) -> str:
+    for name, text in files.items():
+        path = Path(repo, name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    subprocess.run(["git", "-C", repo, "add", "-A"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", message],
+                   check=True, capture_output=True)
+    return subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"], check=True, capture_output=True,
+                          text=True).stdout.strip()
+
+
+def approved_rows(sha: str) -> list[tuple[str, str, str]]:
+    return [(OK, f"{entry['marker']}: {sha}", sha) for entry in plan.passes()]
+
+
+def git_in(repo: str, *args: str) -> str:
+    return subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True,
+                          capture_output=True, text=True).stdout.strip()
+
+
+def planned(repo: str, rows: list, files: list[str], head: str, log: str | None, fetch: str = "",
+            branch: str = "") -> dict:
+    post_approval.ROOT, post_approval.named = repo, lambda *_: log
+    post_approval.judge.cache_clear()
+    with contextlib.redirect_stdout(io.StringIO()):
+        routes = plan.route([plan.Mark(*row) for row in rows], files, head, fetch=fetch, branch=branch)
+    return {item.name: item for item in routes}
+
+
+def fixed(files: dict[str, str], log: str | None) -> dict:
+    with tempfile.TemporaryDirectory() as repo:
+        subprocess.run(["git", "init", "-q", repo], check=True, capture_output=True)
+        approved = committed(repo, {"src/App/Foo.cs": "a\n", "src/App/Bar.cs": "b\n"}, "base")
+        head = committed(repo, files, "fix")
+        return planned(repo, approved_rows(approved), list(files), head, log)
+
+
+def running(routes: dict) -> set[str]:
+    return {name for name, item in routes.items() if item.run}
+
+
+everyone = {entry["id"] for entry in plan.passes()}
+limit = post_approval.policy()["lines"]
+named_log = "error src/App/Foo.cs:1: CS1002"
+routes = fixed({"src/App/Foo.cs": "a;\n"}, named_log)
+report("правка названного Check файла апрувы не снимает", set(), running(routes))
+routes = fixed({"src/App/Bar.cs": "b;\n"}, named_log)
+report("правка неназванного файла поднимает все проходы", everyone, running(routes))
+report("новый круг разбирает дифф от одобренной головы", True, all(item.since for item in routes.values()))
+routes = fixed({"src/App/Foo.cs": "".join(f"{n}\n" for n in range(limit))}, named_log)
+report("правка от предела строк поднимает проходы", True, all(item.run for item in routes.values()))
+routes = fixed({"tests/App/FooTests.cs": "t\n"}, named_log)
+report("правка теста без упоминания в журнале апрувы не снимает", False, any(item.run for item in routes.values()))
+routes = fixed({"src/App/Foo.cs": "a;\n"}, None)
+report("непрочитанный журнал Check правку не принимает", everyone, running(routes))
+
+with tempfile.TemporaryDirectory() as repo:
+    subprocess.run(["git", "init", "-q", repo], check=True, capture_output=True)
+    approved = committed(repo, {"src/App/Foo.cs": "a\n", "src/App/Bar.cs": "b\n"}, "base")
+    head = committed(repo, {"src/App/Bar.cs": "b;\n"}, "fix")
+    first = plan.passes()[0]
+    rows = approved_rows(approved) + [(OK, f"{first['marker']}: {head}", head)]
+    routes = planned(repo, rows, ["src/App/Bar.cs"], head, named_log)
+    report("апрув новой головы одним проходом апрувы других не продлевает", everyone - {first["id"]}, running(routes))
+    rows = [(OK, f"{first['marker']}: {approved}", approved)] + [
+        (OK, f"{entry['marker']}: {head}", head) for entry in plan.passes()[1:]]
+    routes = planned(repo, rows, ["src/App/Bar.cs"], head, named_log)
+    report("апрув, выданный до апрува всех проходов, покрывает голову общего апрува", set(), running(routes))
+
+with tempfile.TemporaryDirectory() as root:
+    origin, clone = os.path.join(root, "origin"), os.path.join(root, "clone")
+    subprocess.run(["git", "init", "-q", "-b", "develop", origin], check=True, capture_output=True)
+    base = committed(origin, {"src/App/Foo.cs": "a\n", "src/App/Bar.cs": "b\n"}, "base")
+    git_in(origin, "checkout", "-q", "-b", "feature")
+    approved = committed(origin, {"src/App/Foo.cs": "a1\n"}, "change")
+    head = committed(origin, {"src/App/Foo.cs": "a1;\n"}, "fix")
+    git_in(origin, "checkout", "-q", "develop")
+    subprocess.run(["git", "clone", "-q", "--depth=1", "--branch=develop", f"file://{origin}", clone], check=True,
+                   capture_output=True)
+    routes = planned(clone, approved_rows(approved), ["src/App/Foo.cs"], head, named_log, "refs/heads/feature")
+    report("план в CI на мелком клоне базы дозагружает коммиты PR и правку принимает", set(), running(routes))
+
+    full = os.path.join(root, "full")
+    subprocess.run(["git", "clone", "-q", f"file://{origin}", full], check=True, capture_output=True)
+    committed(origin, {"src/App/Other.cs": "".join(f"{n}\n" for n in range(limit))}, "base moved")
+    git_in(origin, "checkout", "-q", "feature")
+    git_in(origin, "merge", "-q", "--no-edit", "develop")
+    merged = git_in(origin, "rev-parse", "HEAD")
+    routes = planned(full, approved_rows(approved), ["src/App/Foo.cs"], merged, named_log, "refs/heads/feature",
+                     "develop")
+    report("слияние базы без ручного разрешения в правку не входит", set(), running(routes))
+    report("дозагрузка в полном клоне не делает его мелким", "false",
+           git_in(full, "rev-parse", "--is-shallow-repository"))
+
+    git_in(origin, "checkout", "-q", "-b", "side", base)
+    committed(origin, {"src/App/Evil.cs": "".join(f"{n}\n" for n in range(limit * 10))}, "side")
+    git_in(origin, "checkout", "-q", "feature")
+    git_in(origin, "merge", "-q", "--no-edit", "side")
+    smuggled = git_in(origin, "rev-parse", "HEAD")
+    routes = planned(full, approved_rows(approved), ["src/App/Evil.cs"], smuggled, named_log, "refs/heads/feature",
+                     "develop")
+    report("слияние ветки не из базы после апрува поднимает проходы", everyone, running(routes))
+
+events = [(entry["id"], "approve", "H1") for entry in plan.passes()]
+first, second = plan.passes()[0]["id"], plan.passes()[1]["id"]
+events += [(first, "changes", "H2"), (second, "approve", "H2"), (first, "approve", "H3")]
+report("правки другого прохода не возвращают снятые апрувы", ("H3", "H2", "H1"),
+       tuple(plan.covered(events).get(entry["id"]) for entry in plan.passes()))
+
+log = "\n".join(["== text-registry: check-text-registry.py", "src/App/Bar.cs: unused key",
+                 "== pipeline: check-pipeline.py", "error src/App/Foo.cs:3", "",
+                 "OK   text-registry: check-text-registry.py (1 s)", "FAIL pipeline: check-pipeline.py (2 s)"])
+text = post_approval.failed_output(log)
+report("из журнала берется вывод только упавших гейтов", (True, False),
+       (post_approval.mentioned("src/App/Foo.cs", text), post_approval.mentioned("src/App/Bar.cs", text)))
+report("путь в журнале совпадает только целиком", (False, True, True),
+       (post_approval.mentioned("README.md", "docs/README.md:1"), post_approval.mentioned("README.md", "./README.md:2:"),
+        post_approval.mentioned("src/a.cs", "/home/runner/work/x/src/a.cs(3,1)")))
+
+post_approval.ROOT = ROOT
+post_approval.judge.cache_clear()
+with contextlib.redirect_stdout(io.StringIO()):
+    routes = plan.route([plan.Mark(*row) for row in approved_rows("aaa1111")], ["src/App/Foo.cs"], HEAD)
+report("непрочитанный дифф правки поднимает проходы", True, all(item.run for item in routes))
+decided, _ = run([(OK, "aaa1111")], ["src/App/Foo.cs"])
+report("апрув одного прохода правилом правки не задет", "false", decided.get("run_architecture"))
+
 print()
 if failed:
     print(f"review-plan: провалено {failed} из {checked}", file=sys.stderr)

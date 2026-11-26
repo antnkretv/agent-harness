@@ -148,9 +148,54 @@ def counts(marks: list[Mark], marker: str, head: str, base: str = "", policy: st
     return spent, last, streak, since
 
 
-def route(marks: list[Mark], changed: list[str], head: str, base: str = "", policy: str = "", task: str = "") -> list[Route]:
+def covered(events: list[tuple[str, str, str]]) -> dict[str, str]:
+    names = [entry.get("id", "") for entry in passes()]
+    latest: dict[str, str] = {}
+    since, fresh = "", set()
+    for name, state, sha in events:
+        if name not in names:
+            continue
+        if state == "approve":
+            latest[name] = sha
+            fresh.add(name)
+        else:
+            latest.pop(name, None)
+        if not since and len(latest) == len(names):
+            since, fresh = sha, set()
+    return {name: sha if name in fresh else since for name, sha in latest.items()} if since else {}
+
+
+def mark_events(marks: list[Mark]) -> list[tuple[str, str, str]]:
+    found = []
+    for mark in marks:
+        name = next((entry.get("id", "") for entry in passes() if mine(mark, entry.get("marker", ""))), "")
+        if not name:
+            continue
+        if held(mark.state, mark.headline):
+            found.append((name, "changes", mark.sha))
+        elif settled(mark.state, mark.headline) and not local(mark.headline) and mark.sha:
+            found.append((name, "approve", mark.sha))
+    return found
+
+
+def reopened(approved: str, head: str, fetch: str = "", branch: str = "") -> str:
+    import post_approval
+
+    if not approved or approved == head:
+        return ""
+    fix = post_approval.judge(approved, head, fetch, branch)
+    if fix.accepted:
+        print(annotation("notice", "plan_fix_accepted", approved[:9], fix.why))
+        return ""
+    print(annotation("notice", "plan_fix_reopened", approved[:9], fix.why))
+    return approved
+
+
+def route(marks: list[Mark], changed: list[str], head: str, base: str = "", policy: str = "", task: str = "",
+          fetch: str = "", branch: str = "") -> list[Route]:
     stall = get("processes.review.stallRounds", 0, file=PIPELINE)
     found = []
+    approved = covered(mark_events(marks))
     for entry in passes():
         name = entry.get("id", "")
         spent, last, streak, since = counts(marks, entry.get("marker", ""), head, base, policy, task)
@@ -159,7 +204,10 @@ def route(marks: list[Mark], changed: list[str], head: str, base: str = "", poli
         within = spent < budget
         run, why = within, msg("plan_budget_spent")
         outcome = "pending" if run else "budget-exhausted"
-        if last == OK:
+        since_fix = reopened(approved.get(name, ""), head, fetch, branch) if last == OK else ""
+        if since_fix:
+            last, since = "", since_fix
+        elif last == OK:
             run, why, outcome = False, msg("plan_already_approved"), "approved"
             print(annotation("notice", "plan_approved_note", name))
         if run and last != BLOCK and prose_only(entry, changed):

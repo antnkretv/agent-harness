@@ -487,12 +487,12 @@
       "auditRunner": "review-requirements"
     },
     "final-gates": {
-      "title": "Финальные гейты перед Ready",
+      "title": "Check в CI на одобренной голове перед Ready",
       "doc": ".agents/skills/issue-dev/SKILL.md#gates",
       "steps": [
         {
           "id": "gates",
-          "title": "Полный check-all один раз после апрува всех проходов",
+          "title": "Check в CI на одобренной голове и гейты PR",
           "actor": "command",
           "doc": ".agents/skills/issue-dev/SKILL.md#gates",
           "requires": [],
@@ -502,7 +502,8 @@
           "gates": [],
           "command": [
             "python3",
-            ".harness/scripts/check/check-all.py"
+            ".harness/scripts/check/check-all.py",
+            "--change"
           ]
         }
       ],
@@ -977,6 +978,21 @@
         "*-lock.json",
         "*-lock.yaml",
         ".harness/state/*"
+      ]
+    },
+    "postApprovalFix": {
+      "doc": "docs/platform/delivery/ci-cd.md#правка-после-апрува",
+      "lines": 50,
+      "build": [
+        "*.csproj",
+        "*.props",
+        "*.targets",
+        "*.sln",
+        "*/global.json",
+        "global.json",
+        "*package.json",
+        "*package-lock.json",
+        "*tsconfig*.json"
       ]
     },
     "authorship": {
