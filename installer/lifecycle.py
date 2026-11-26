@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import urllib.parse
@@ -12,6 +13,7 @@ from pathlib import Path
 
 from .configure import report, settle
 from .install import apply
+from .render import revision
 from .lock_install import archive_build, loader
 from .verify import status
 from .resources import LOCK, PROJECT, Refusal, git, kit_root, load_json, msg, read_lock, relocated, repository, say, sha256
@@ -49,17 +51,25 @@ def upgrade(args: argparse.Namespace) -> int:
         raise Refusal(msg("upgrade_unpinned", LOCK))
     kit = {**own_kit(), **{key: installed[key] for key in ("name", "repository") if installed.get(key)}}
     given = args.new_archive
-    archive = Path(given).resolve() if given else released(kit, args.version or latest(kit["repository"]))
+    if given:
+        archive = Path(given).resolve()
+    elif args.commit:
+        archive = committed(kit["repository"], args.commit)
+    else:
+        archive = released(kit, args.version or latest(kit["repository"]))
     try:
-        return upgraded(args, root, installed.get("version", ""), kit["repository"], archive)
+        return upgraded(args, root, installed, kit["repository"], archive)
     finally:
-        if not given:
+        if args.commit:
+            shutil.rmtree(archive.parent, ignore_errors=True)
+        elif not given:
             archive.unlink(missing_ok=True)
 
 
-def upgraded(args: argparse.Namespace, root: Path, previous: str, source: str, archive: Path) -> int:
-    sha, (version, *_), tree = archive_build(archive)
-    if sha == read_lock(root)["kit"]["sha256"]:
+def upgraded(args: argparse.Namespace, root: Path, installed: dict, source: str, archive: Path) -> int:
+    sha, shipped, tree = archive_build(archive)
+    previous, version = label(installed), label(shipped)
+    if tree == read_lock(root)["kit"].get("tree"):
         say("upgrade_current", previous, sha[:12])
         return 0
     ah = loader()
@@ -74,14 +84,14 @@ def upgraded(args: argparse.Namespace, root: Path, previous: str, source: str, a
                        "--type", "chore", "--key", UPGRADE_KEY], root)
         found = json.loads(started.stdout)
         work, branch = Path(found["path"]), found["branch"]
-    if read_lock(work)["kit"]["sha256"] != sha:
+    if read_lock(work)["kit"].get("tree") != tree:
         asked = json.loads(run(new + ["configure", "--target", str(work), "--next"], work).stdout)
         if not asked.get("done") or asked.get("problems"):
             print(asked.get("show", ""))
             raise Refusal(msg("upgrade_questions", home / "ah.py", work))
         say("upgrade_overwrites")
         status(argparse.Namespace(target=str(work)))
-        relinked = relink(work, source, previous, version)
+        relinked = relink(work, source, revision(installed), revision(shipped))
         run(new + ["apply", "--target", str(work), "--archive", str(archive), "--source", ""], work, show=True)
         if args.no_pr:
             say("upgrade_done", previous, version, relinked, home / "ah.py")
@@ -141,10 +151,26 @@ def released(kit: dict, version: str) -> Path:
     return archive
 
 
+def label(kit: dict) -> str:
+    return f"{kit.get('version', '')}@{kit['commit'][:12]}" if kit.get("commit") else kit.get("version", "")
+
+
+def committed(repository: str, ref: str) -> Path:
+    ah = loader()
+    try:
+        source = ah.fetched(repository, ref)
+    except OSError as error:
+        raise Refusal(msg("upgrade_fetch_failed", ref, repository, error)) from None
+    try:
+        return ah.built(source, True)
+    finally:
+        shutil.rmtree(source, ignore_errors=True)
+
+
 def relink(root: Path, source: str, old: str, new: str) -> int:
-    if not old or old == new:
+    if old == new:
         return 0
-    before, after = f"{source}/blob/v{old}/", f"{source}/blob/v{new}/"
+    before, after = f"{source}/blob/{old}/", f"{source}/blob/{new}/"
     paths = [path for path in git(root, "grep", "-lzF", "-e", before, check=False).split("\0") if path]
     for path in paths:
         with open(root / path, encoding="utf-8", newline="") as file:

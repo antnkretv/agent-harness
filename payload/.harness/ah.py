@@ -1,9 +1,10 @@
 """Загрузчик agent-harness: ставит в кеш архив версии из .harness/state/lock.json и передает команду утилите ah.
 
     python3 .harness/ah.py install [--archive <архив>]   # Windows: py -3 .harness/ah.py install
-    python3 .harness/ah.py upgrade [--version <версия>]  # новая версия комплекта: ветка, lock и PR
+    python3 .harness/ah.py upgrade [--version <версия> | --commit <ветка или коммит>]  # ветка, lock и PR
 
-Версии нет в кеше - загрузчик скачивает архив выпуска из kit.repository и сверяет его sha256 с lock.
+Версии нет в кеше - загрузчик собирает комплект из kit.commit репозитория kit.repository и сверяет его файлы с kit.tree,
+а без kit.commit скачивает архив выпуска и сверяет его sha256 с lock.
 """
 
 import hashlib
@@ -26,6 +27,7 @@ MSG_built='ah: файлы архива %s не сходятся с kit.tree %s �
 MSG_unbuilt='ah: kit.py build в исходнике %s не собрал архив'
 MSG_uncached='ah: версии %s нет в кеше %s или ее файлы там изменены: передайте архив флагом --archive'
 MSG_download='ah: архив выпуска %s не скачан: %s. Передайте архив флагом --archive'
+MSG_fetch='ah: коммит %s комплекта не получен из %s: %s. Передайте архив флагом --archive'
 
 
 def msg(key: str, *args: object) -> str:
@@ -73,15 +75,44 @@ def unpacked(archive: Path, home: Path, tree: str, sha: str = "") -> Path:
     return home
 
 
-def built(source: Path) -> Path:
+def isolated() -> dict:
+    local = set(subprocess.run(["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True).stdout.split())
+    local -= {"GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT"}
+    return {key: value for key, value in os.environ.items() if key not in local}
+
+
+def built(source: Path, commit: bool = False) -> Path:
     CACHE.mkdir(parents=True, exist_ok=True)
     out = Path(tempfile.mkdtemp(prefix=".build-", dir=CACHE))
-    if subprocess.run([sys.executable, str(source / "tools" / "kit.py"), "build", "--out", str(out)],
-                      stdout=subprocess.DEVNULL).returncode:
+    if subprocess.run([sys.executable, str(source / "tools" / "kit.py"), "build", "--out", str(out), *(["--commit"] if commit else [])],
+                      stdout=subprocess.DEVNULL, env=isolated()).returncode:
         shutil.rmtree(out, ignore_errors=True)
         sys.exit(msg("unbuilt", source))
     (found,) = out.glob("*.tar.gz")
     return found
+
+
+def fetched(repository: str, ref: str) -> Path:
+    CACHE.mkdir(parents=True, exist_ok=True)
+    work, env = Path(tempfile.mkdtemp(prefix=".fetch-", dir=CACHE)), isolated()
+    for command in (["init", "-q"], ["fetch", "-q", "--depth", "1", repository, ref], ["checkout", "-q", "--detach", "FETCH_HEAD"]):
+        try:
+            done = subprocess.run(["git", "-C", str(work), *command], capture_output=True, text=True, timeout=300, env=env)
+        except subprocess.TimeoutExpired as error:
+            shutil.rmtree(work, ignore_errors=True)
+            raise OSError(str(error)) from None
+        if done.returncode:
+            shutil.rmtree(work, ignore_errors=True)
+            raise OSError(done.stderr.strip())
+    return work
+
+
+def from_source(source: Path, tree: str, commit: bool = False) -> Path:
+    archive = built(source, commit)
+    try:
+        return unpacked(archive, CACHE / f"src-{tree}", tree)
+    finally:
+        shutil.rmtree(archive.parent, ignore_errors=True)
 
 
 def release(kit: dict) -> str:
@@ -122,11 +153,16 @@ def main(args: list[str]) -> int:
     if home is None and archive is not None:
         home = unpacked(archive, CACHE / sha, tree, sha)
     elif home is None and kit.get("source"):
-        archive = built(ROOT / kit["source"])
+        home = from_source(ROOT / kit["source"], tree)
+    elif home is None and kit.get("commit") and kit.get("repository"):
         try:
-            home = unpacked(archive, CACHE / f"src-{tree}", tree)
+            source = fetched(kit["repository"], kit["commit"])
+        except OSError as error:
+            sys.exit(msg("fetch", kit["commit"][:12], kit["repository"], error))
+        try:
+            home = from_source(source, tree, True)
         finally:
-            shutil.rmtree(archive.parent, ignore_errors=True)
+            shutil.rmtree(source, ignore_errors=True)
     elif home is None and kit.get("repository"):
         try:
             archive = downloaded(kit)

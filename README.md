@@ -7,13 +7,11 @@
 
 ## Быстрый старт
 
-Скачать выпуск и сверить sha256, распаковать вне репозитория проекта:
+Собрать архив из `develop` (или скачать выпуск и сверить его `.sha256`), распаковать вне репозитория проекта:
 
 ```bash
-V=<версия>; URL=https://github.com/antnkretv/agent-harness/releases/download/v$V
-curl -fLO "$URL/agent-harness-$V.tar.gz" -fLO "$URL/agent-harness-$V.tar.gz.sha256"
-sha256sum -c "agent-harness-$V.tar.gz.sha256"
-mkdir -p "$HOME/.cache/harness" && tar -xzf "agent-harness-$V.tar.gz" -C "$HOME/.cache/harness"
+git clone -b develop https://github.com/antnkretv/agent-harness "$HOME/src/agent-harness"
+python3 "$HOME/src/agent-harness/tools/kit.py" build --commit --out "$HOME/.cache/harness"   # архив и sha256
 ```
 
 Подключить проект, один раз: в сессии агента в клоне проекта попросить выполнить
@@ -31,7 +29,7 @@ python3 .harness/ah.py install   # Windows: py -3 .harness/ah.py install
 ## Обновление и смена настроек
 
 ```bash
-python3 .harness/ah.py upgrade [--version <версия>]   # ветка, новая версия, lock и черновой PR
+python3 .harness/ah.py upgrade --commit develop   # или --version <версия>: ветка, новая версия, lock и черновой PR
 ```
 
 Обновление из архива и смена модулей - скиллы `harness-sync` и `harness-configure` архива

@@ -18,7 +18,7 @@ from .verify import installed_kit
 RECORD = "harness/installed.json"
 
 
-def archive_build(archive: Path) -> tuple[str, tuple, str]:
+def archive_build(archive: Path) -> tuple[str, dict, str]:
     with tarfile.open(archive) as tar:
         manifests = [member for member in tar.getmembers() if member.name.count("/") == 1 and member.name.endswith("/kit.json")]
         if len(manifests) != 1:
@@ -26,7 +26,7 @@ def archive_build(archive: Path) -> tuple[str, tuple, str]:
         kit = json.loads(tar.extractfile(manifests[0]).read().decode("utf-8"))
         files = [(member.name.split("/", 1)[1], tar.extractfile(member).read())
                  for member in tar.getmembers() if member.isfile() and "/" in member.name]
-    return sha256(archive.read_bytes()), build_of(kit), loader().tree_digest(files)
+    return sha256(archive.read_bytes()), kit, loader().tree_digest(files)
 
 
 @functools.cache

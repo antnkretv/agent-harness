@@ -683,6 +683,71 @@ class Smoke:
                                                                           "--new-archive", str(self.archive_of(newer)), "--no-pr"],
                     reason=kit_msg("upgrade_current", version, "\0").split("\0")[0])
 
+    def committed(self) -> None:
+        """Установка по коммиту без выпуска: lock закрепляет коммит репозитория комплекта, загрузчик собирает
+        комплект из его исходника в пустой кеш, а upgrade --commit ставит следующий коммит ветки и переводит
+        ссылки проекта на справочники на него."""
+        source, out = self.work / "source", self.work / "source-build"
+        source.mkdir(parents=True)
+        run(["git", "init", "-q", "-b", "develop"], source)
+        listed = run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], KIT).stdout.split("\0")
+        for path in filter(None, listed):
+            if (KIT / path).is_file():
+                (source / path).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(KIT / path, source / path)
+        run(["git", "add", "-A"], source)
+        run(["git", "commit", "-qm", "kit"], source)
+        first = self.commit_build(source, out)
+        self.bootstrap()
+        if not self.configure(msg("smoke_configure"), *self.answers(), kit=first) or not self.expect(msg("smoke_apply"), self.apply(first)):
+            return
+        self.installed = first
+        lock = self.read_json(LOCK)
+        old = lock["kit"].get("commit", "")
+        self.check(msg("smoke_commit_pinned"), old == run(["git", "rev-parse", "HEAD"], source).stdout.strip())
+        missing = (self.work / "missing-kit").as_uri()
+        lock["kit"]["repository"] = missing
+        self.write_json(LOCK, lock)
+        self.write("docs/own.md", f"<{source.as_uri()}/blob/{old}/payload/docs/platform/agents/harness.md>\n")
+        self.commit("chore: harness")
+        head = run(["git", "symbolic-ref", "HEAD"], self.repo).stdout
+        hook = {"AGENT_HARNESS_CACHE": str(self.work / "commit-cache"), "GIT_CONFIG_COUNT": "2",
+                "GIT_CONFIG_KEY_0": "core.autocrlf", "GIT_CONFIG_VALUE_0": "true",
+                "GIT_CONFIG_KEY_1": f"url.{source.as_uri()}.insteadOf", "GIT_CONFIG_VALUE_1": missing,
+                "GIT_DIR": str(self.repo / ".git"), "GIT_WORK_TREE": str(self.repo)}
+        self.expect(msg("smoke_commit_built"), [sys.executable, str(self.repo / LOADER), "install"], env=hook)
+        self.check(msg("smoke_commit_hook"), self.clean() and not (self.repo / ".git" / "shallow").exists()
+                   and run(["git", "symbolic-ref", "HEAD"], self.repo).stdout == head)
+        self.check(msg("smoke_commit_cached"), (self.work / "commit-cache" / f"src-{lock['kit']['tree']}" / "ah.py").is_file())
+        edited = source / "payload" / EDITED
+        edited.write_text(edited.read_text(encoding="utf-8") + "\nsmoke-kit-line\n", encoding="utf-8", newline="\n")
+        run(["git", "commit", "-qam", "kit next"], source)
+        new = run(["git", "rev-parse", "HEAD"], source).stdout.strip()
+        lock = self.read_json(LOCK)
+        lock["kit"]["repository"] = source.as_uri()
+        self.write_json(LOCK, lock)
+        self.configure(msg("smoke_upgrade_answered"), kit=first)
+        self.commit("chore: harness answers")
+        self.expect(msg("smoke_commit_upgrade"), self.harness("upgrade", "--commit", "develop", "--no-pr"))
+        self.check(msg("smoke_commit_upgraded"), self.read_json(LOCK)["kit"].get("commit") == new
+                   and self.read(EDITED).endswith("smoke-kit-line\n") and f"/blob/{new}/" in self.read("docs/own.md"))
+        lock = self.read_json(LOCK)
+        lock["kit"]["repository"] = source.as_uri()
+        self.write_json(LOCK, lock)
+        self.commit("chore: harness next")
+        self.expect(msg("smoke_commit_current"), self.harness("upgrade", "--commit", "develop", "--no-pr"),
+                    reason=kit_msg("upgrade_current", "\0", "\0").split("\0")[0])
+
+    def commit_build(self, source: Path, out: Path) -> Path:
+        """Сборка kit.py build --commit из чистого checkout: архив несет коммит, а каталог распакован рядом."""
+        run([sys.executable, str(source / "tools" / "kit.py"), "build", "--out", str(out), "--commit"], source)
+        (packed,) = out.glob("*.tar.gz")
+        unpacked = out / "unpacked"
+        unpack(packed, unpacked)
+        (folder,) = unpacked.iterdir()
+        self.archives[folder] = packed
+        return folder
+
     def initialized(self) -> None:
         """init в пустом проекте: вопросы настройки, затем оболочка, манифест, lock и версия в кеше; второй init отказывает."""
         self.bootstrap()
@@ -817,6 +882,8 @@ def smoke(kit_folder: Path, adapters: list[str], kit: dict) -> list[str]:
         locked.locked()
         initialized = Smoke(kit_folder, [], root / "init")
         initialized.initialized()
+        pinned = Smoke(kit_folder, [], root / "commit")
+        pinned.committed()
         bare = Smoke(kit_folder, [], root / "no-ci")
         bare.without_ci()
         roles = Smoke(kit_folder, [], root / "roles")
@@ -831,6 +898,6 @@ def smoke(kit_folder: Path, adapters: list[str], kit: dict) -> list[str]:
         for shape, adapter, absent in (("backend", "dotnet", NODE_FILES), ("frontend", "node", DOTNET_FILES))[:2 * bool(adapters)]:
             sides.append(Smoke(kit_folder, [adapter], root / shape))
             sides[-1].sided(shape, absent)
-        return [problem for each in (scenario, locked, initialized, bare, roles, steps, packed, hosted, *sides) for problem in each.problems]
+        return [problem for each in (scenario, locked, initialized, pinned, bare, roles, steps, packed, hosted, *sides) for problem in each.problems]
 
 
