@@ -48,6 +48,7 @@ TOOLS = forge.AgentTools(
     opens=("create_pull_request",),
     changes=("create_pull_request", "update_pull_request"),
     close=forge.CloseTool("update_pull_request", "state", "closed"),
+    repository=("owner", "repo"),
 )
 
 THREADS = """query($owner: String!, $name: String!, $number: Int!, $after: String) {

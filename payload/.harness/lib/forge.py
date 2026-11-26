@@ -78,10 +78,16 @@ class AgentTools:
     opens: tuple[str, ...] = ()
     changes: tuple[str, ...] = ()
     close: CloseTool | None = None
+    repository: tuple[str, ...] = ()
 
     def closes(self, tool: str, inputs: Mapping[str, object]) -> bool:
         return bool(self.close and tool == self.prefix + self.close.action
                     and str(inputs.get(self.close.field) or "").lower() == self.close.value)
+
+    def foreign(self, inputs: Mapping[str, object], own: str) -> bool:
+        target = "/".join(str(inputs.get(field) or "") for field in self.repository)
+        return bool(self.repository and own and all(inputs.get(field) for field in self.repository)
+                    and target.lower() != own.lower())
 
 
 @dataclass(frozen=True)

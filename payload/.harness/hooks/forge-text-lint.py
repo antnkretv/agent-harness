@@ -100,7 +100,8 @@ def evaluate(payload: dict) -> str | None:
             chunks.append((field, value))
     merge = tools.merge if tools.merge and tool[len(tools.prefix):] == tools.merge.action else None
     number = tool_input.get(merge.number) if merge else None
-    if merge and merge.method and tool_input.get(merge.method) == merge.no_commit:
+    if merge and (merge.method and tool_input.get(merge.method) == merge.no_commit
+                  or tools.foreign(tool_input, forge.repo())):
         number = None
     url = forge.change_url(number) if number else ""
     trailer = "PR: " + url if url else ""
