@@ -75,11 +75,16 @@ def unpacked(archive: Path, home: Path, tree: str, sha: str = "") -> Path:
     return home
 
 
+def isolated() -> dict:
+    local = subprocess.run(["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True).stdout.split()
+    return {key: value for key, value in os.environ.items() if key not in local}
+
+
 def built(source: Path, commit: bool = False) -> Path:
     CACHE.mkdir(parents=True, exist_ok=True)
     out = Path(tempfile.mkdtemp(prefix=".build-", dir=CACHE))
     if subprocess.run([sys.executable, str(source / "tools" / "kit.py"), "build", "--out", str(out), *(["--commit"] if commit else [])],
-                      stdout=subprocess.DEVNULL).returncode:
+                      stdout=subprocess.DEVNULL, env=isolated()).returncode:
         shutil.rmtree(out, ignore_errors=True)
         sys.exit(msg("unbuilt", source))
     (found,) = out.glob("*.tar.gz")
@@ -88,10 +93,10 @@ def built(source: Path, commit: bool = False) -> Path:
 
 def fetched(repository: str, ref: str) -> Path:
     CACHE.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix=".fetch-", dir=CACHE))
+    work, env = Path(tempfile.mkdtemp(prefix=".fetch-", dir=CACHE)), isolated()
     for command in (["init", "-q"], ["fetch", "-q", "--depth", "1", repository, ref], ["checkout", "-q", "--detach", "FETCH_HEAD"]):
         try:
-            done = subprocess.run(["git", "-C", str(work), *command], capture_output=True, text=True, timeout=300)
+            done = subprocess.run(["git", "-C", str(work), *command], capture_output=True, text=True, timeout=300, env=env)
         except subprocess.TimeoutExpired as error:
             shutil.rmtree(work, ignore_errors=True)
             raise OSError(str(error)) from None

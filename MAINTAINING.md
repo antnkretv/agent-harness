@@ -763,7 +763,9 @@ SHA-256 сжатого gzip также зависит от реализации 
 `kit.commit` пишет только `kit.py build --commit`, и при правках в checkout он отказывает. Выпуск
 собирается без флага, поэтому проект на выпуске скачивает его архив, а не собирает исходник. Корневой
 `.gitattributes` (`* -text`) держит байты checkout одинаковыми на любой машине: без него `core.autocrlf`
-Git for Windows дал бы CRLF и другой `kit.tree`. Без `kit.commit` загрузчик скачивает архив выпуска по адресу из `kit.repository`
+Git for Windows дал бы CRLF и другой `kit.tree`. Git и `kit.py build` загрузчик зовет без переменных из
+`git rev-parse --local-env-vars` (`isolated`): хук `post-checkout` связанного дерева передает `GIT_DIR`
+проекта, и с ним `fetch` и `checkout` ушли бы в репозиторий проекта. Без `kit.commit` загрузчик скачивает архив выпуска по адресу из `kit.repository`
 lock. Токен он не передает: скачивание по адресу выпуска - не запрос к API, и лимит запросов его не
 касается. Адрес выпуска строится по `<repository>/releases/download/v<версия>/<имя>-<версия>.tar.gz`: так
 его публикует workflow выпуска `.github/workflows/release.yml` комплекта, и `ah upgrade` берет тот же адрес.
