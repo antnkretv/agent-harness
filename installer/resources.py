@@ -287,11 +287,11 @@ def steps_moved(root: Path, originals: dict[Path, bytes | None]) -> list[str]:
             project.pop(SETUP)
         return {f"modules.agents.settings.{LEGACY_STEPS}": None, **({SETUP: setup} if moved else {})}
 
-    manifest_rewritten(root, originals, edit)
+    manifest_rewritten(root, originals, edit, {SETUP: f"modules.agents.settings.{LEGACY_STEPS}"})
     return moved
 
 
-def manifest_rewritten(root: Path, originals: dict[Path, bytes | None], edit) -> bool:
+def manifest_rewritten(root: Path, originals: dict[Path, bytes | None], edit, inherits: dict[str, str] | None = None) -> bool:
     from .documents import json_indent, json_text
 
     manifest = root / PROJECT
@@ -312,12 +312,13 @@ def manifest_rewritten(root: Path, originals: dict[Path, bytes | None], edit) ->
         originals.setdefault(answers, answers.read_bytes())
         state = read_answers(root)
         entries, keys = state.setdefault("answers", {}), set(state.get("manifestKeys", []))
+        authors = {key: entries.get(key, entries.get(source, {})).get("by", "agent") for key, source in (inherits or {}).items()}
         for key, value in answered.items():
             if value is None:
                 entries.pop(key, None)
                 keys.discard(key)
             else:
-                entries[key] = {"value": value, "by": entries.get(key, {}).get("by", "agent")}
+                entries[key] = {"value": value, "by": authors.get(key) or entries.get(key, {}).get("by", "agent")}
                 keys.add(key)
         state["manifestKeys"] = sorted(keys)
         if state.get("manifest") == sha256(raw):
