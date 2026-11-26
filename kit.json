@@ -2858,6 +2858,10 @@
       "module": "core",
       "role": "managed"
     },
+    ".harness/prompts/session/gates-missing.md": {
+      "module": "core",
+      "role": "managed"
+    },
     ".harness/scripts/review/post_approval.py": {
       "module": "core",
       "role": "managed"

@@ -411,6 +411,9 @@ class GitHubForge(forge.Forge):
                      for status in self.commit_results(sha).values())
         return found
 
+    def jobs(self, sha: str) -> list[forge.Check]:
+        return [check for check in self.checks(sha) if check.kind == "job"]
+
     def job_log(self, job: str) -> str:
         found = JOB.search(job.strip())
         if not found:

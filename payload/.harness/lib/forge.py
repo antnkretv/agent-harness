@@ -310,6 +310,9 @@ class Forge:
     def checks(self, sha: str) -> list[Check]:
         self._refuse()
 
+    def jobs(self, sha: str) -> list[Check]:
+        self._refuse()
+
     def job_log(self, job: str) -> str:
         self._refuse()
 

@@ -211,30 +211,90 @@ def approved_rows(sha: str) -> list[tuple[str, str, str]]:
     return [(OK, f"{entry['marker']}: {sha}", sha) for entry in plan.passes()]
 
 
-def fixed(files: dict[str, str], log: str) -> dict:
+def git_in(repo: str, *args: str) -> str:
+    return subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True,
+                          capture_output=True, text=True).stdout.strip()
+
+
+def planned(repo: str, rows: list, files: list[str], head: str, log: str | None, fetch: str = "") -> dict:
+    post_approval.ROOT, post_approval.named = repo, lambda *_: log
+    post_approval.judge.cache_clear()
+    with contextlib.redirect_stdout(io.StringIO()):
+        routes = plan.route([plan.Mark(*row) for row in rows], files, head, fetch=fetch)
+    return {item.name: item for item in routes}
+
+
+def fixed(files: dict[str, str], log: str | None) -> dict:
     with tempfile.TemporaryDirectory() as repo:
         subprocess.run(["git", "init", "-q", repo], check=True, capture_output=True)
         approved = committed(repo, {"src/App/Foo.cs": "a\n", "src/App/Bar.cs": "b\n"}, "base")
         head = committed(repo, files, "fix")
-        post_approval.ROOT, post_approval.named = repo, lambda *_: log
-        post_approval.judge.cache_clear()
-        with contextlib.redirect_stdout(io.StringIO()):
-            routes = plan.route([plan.Mark(*row) for row in approved_rows(approved)], list(files), head)
-        return {item.name: item for item in routes}
+        return planned(repo, approved_rows(approved), list(files), head, log)
 
 
+def running(routes: dict) -> set[str]:
+    return {name for name, item in routes.items() if item.run}
+
+
+everyone = {entry["id"] for entry in plan.passes()}
 limit = post_approval.policy()["lines"]
 named_log = "error src/App/Foo.cs:1: CS1002"
 routes = fixed({"src/App/Foo.cs": "a;\n"}, named_log)
-report("правка названного Check файла апрувы не снимает", set(), {name for name, item in routes.items() if item.run})
+report("правка названного Check файла апрувы не снимает", set(), running(routes))
 routes = fixed({"src/App/Bar.cs": "b;\n"}, named_log)
-report("правка неназванного файла поднимает все проходы", {entry["id"] for entry in plan.passes()},
-       {name for name, item in routes.items() if item.run})
+report("правка неназванного файла поднимает все проходы", everyone, running(routes))
 report("новый круг разбирает дифф от одобренной головы", True, all(item.since for item in routes.values()))
 routes = fixed({"src/App/Foo.cs": "".join(f"{n}\n" for n in range(limit))}, named_log)
 report("правка от предела строк поднимает проходы", True, all(item.run for item in routes.values()))
 routes = fixed({"tests/App/FooTests.cs": "t\n"}, named_log)
 report("правка теста без упоминания в журнале апрувы не снимает", False, any(item.run for item in routes.values()))
+routes = fixed({"src/App/Foo.cs": "a;\n"}, None)
+report("непрочитанный журнал Check правку не принимает", everyone, running(routes))
+
+with tempfile.TemporaryDirectory() as repo:
+    subprocess.run(["git", "init", "-q", repo], check=True, capture_output=True)
+    approved = committed(repo, {"src/App/Foo.cs": "a\n", "src/App/Bar.cs": "b\n"}, "base")
+    head = committed(repo, {"src/App/Bar.cs": "b;\n"}, "fix")
+    first = plan.passes()[0]
+    rows = approved_rows(approved) + [(OK, f"{first['marker']}: {head}", head)]
+    routes = planned(repo, rows, ["src/App/Bar.cs"], head, named_log)
+    report("апрув новой головы одним проходом апрувы других не продлевает", everyone - {first["id"]}, running(routes))
+    rows = [(OK, f"{first['marker']}: {approved}", approved)] + [
+        (OK, f"{entry['marker']}: {head}", head) for entry in plan.passes()[1:]]
+    routes = planned(repo, rows, ["src/App/Bar.cs"], head, named_log)
+    report("апрув, выданный до апрува всех проходов, покрывает голову общего апрува", set(), running(routes))
+
+with tempfile.TemporaryDirectory() as root:
+    origin, clone = os.path.join(root, "origin"), os.path.join(root, "clone")
+    subprocess.run(["git", "init", "-q", "-b", "develop", origin], check=True, capture_output=True)
+    base = committed(origin, {"src/App/Foo.cs": "a\n", "src/App/Bar.cs": "b\n"}, "base")
+    git_in(origin, "checkout", "-q", "-b", "feature")
+    approved = committed(origin, {"src/App/Foo.cs": "a1\n"}, "change")
+    head = committed(origin, {"src/App/Foo.cs": "a1;\n"}, "fix")
+    git_in(origin, "checkout", "-q", "develop")
+    subprocess.run(["git", "clone", "-q", "--depth=1", "--branch=develop", f"file://{origin}", clone], check=True,
+                   capture_output=True)
+    routes = planned(clone, approved_rows(approved), ["src/App/Foo.cs"], head, named_log, "refs/heads/feature")
+    report("план в CI на мелком клоне базы дозагружает коммиты PR и правку принимает", set(), running(routes))
+
+    git_in(origin, "checkout", "-q", "develop")
+    committed(origin, {"src/App/Other.cs": "".join(f"{n}\n" for n in range(limit))}, "base moved")
+    git_in(origin, "checkout", "-q", "feature")
+    git_in(origin, "merge", "-q", "--no-edit", "develop")
+    merged = git_in(origin, "rev-parse", "HEAD")
+    routes = planned(origin, approved_rows(approved), ["src/App/Foo.cs"], merged, named_log)
+    report("слияние базы без ручного разрешения в правку не входит", set(), running(routes))
+
+log = "\n".join(["== text-registry: check-text-registry.py", "src/App/Bar.cs: unused key",
+                 "== pipeline: check-pipeline.py", "error src/App/Foo.cs:3", "",
+                 "OK   text-registry: check-text-registry.py (1 s)", "FAIL pipeline: check-pipeline.py (2 s)"])
+text = post_approval.failed_output(log)
+report("из журнала берется вывод только упавших гейтов", (True, False),
+       (post_approval.mentioned("src/App/Foo.cs", text), post_approval.mentioned("src/App/Bar.cs", text)))
+report("путь в журнале совпадает только целиком", (False, True, True),
+       (post_approval.mentioned("README.md", "docs/README.md:1"), post_approval.mentioned("README.md", "./README.md:2:"),
+        post_approval.mentioned("src/a.cs", "/home/runner/work/x/src/a.cs(3,1)")))
+
 post_approval.ROOT = ROOT
 post_approval.judge.cache_clear()
 with contextlib.redirect_stdout(io.StringIO()):

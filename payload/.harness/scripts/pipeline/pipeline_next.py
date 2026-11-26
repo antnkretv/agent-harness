@@ -39,7 +39,7 @@ STALL = 3
 ENTRY = {"base": re.compile(r".+"), "review": re.compile(r"ci|local"), "rounds": re.compile(r"0|[1-9][0-9]*|max"),
          "merge": re.compile(r"human|agent")}
 RELEASE_ENTRY = ("merge",)
-WAITS = ("review-wait", "gates-wait", "release-wait")
+WAITS = ("review-wait", "gates-wait", "gates-missing", "release-wait")
 RELEASE_START_MINUTES = 180
 BACKGROUND_HOURS = 2
 PIPELINE_COMMANDS = ("pipeline-run.py", "review-local.py")
@@ -394,11 +394,12 @@ def change_of(workspace: Workspace, data: dict, state: dict):
     return opened[0]
 
 
-def verdicts(pull) -> tuple[dict[str, dict], set[str]]:
+def verdicts(pull) -> tuple[dict[str, dict], set[str], list[tuple[str, str, str]]]:
     import review_evidence
     entries = review_policy.passes()
     found: dict[str, dict] = {}
     returned: set[str] = set()
+    events: list[tuple[str, str, str, str]] = []
 
     def owner(headline: str) -> str:
         return next((entry["id"] for entry in entries
@@ -410,12 +411,16 @@ def verdicts(pull) -> tuple[dict[str, dict], set[str]]:
         if not name or review_policy.local(headline):
             continue
         if name in found:
-            if review_policy.verdict(item.state, headline) == "changes" and review_evidence.review_author(item):
-                returned.add(item.sha)
+            state = review_policy.verdict(item.state, headline)
+            if state and review_evidence.review_author(item):
+                events.append((item.created, name, state, item.sha))
+                if state == "changes":
+                    returned.add(item.sha)
             continue
         mark = review_evidence.review_mark(pull.number, item, headline, item.body)
         state = review_policy.verdict(mark.state, headline) if mark else ""
         if state:
+            events.append((item.created, name, state, mark.sha))
             found[name] = {"state": state, "sha": mark.sha, "at": mark.created, "source": "remote",
                            "task": mark.task}
             if state == "changes":
@@ -427,37 +432,27 @@ def verdicts(pull) -> tuple[dict[str, dict], set[str]]:
         state, task = review_policy.verdict("", headline), review_policy.task_of(note.body)
         if not (name and sha and state and note.author == login and review_policy.local(headline)):
             continue
+        events.append((note.created, name, state, sha))
         if state == "changes":
             returned.add(sha)
         if moment(note.created) >= moment(found.get(name, {}).get("at", "")):
             found[name] = {"state": state, "sha": sha, "at": note.created, "source": "local",
                            "task": task, "direct": review_policy.directed(note.body)}
-    return found, returned
+    events.sort(key=lambda item: moment(item[0]))
+    return found, returned, [event[1:] for event in events]
 
 
-def pending_passes(pull, current: dict) -> list[dict]:
+def pending_passes(pull, current: dict, events: list[tuple[str, str, str]]) -> list[dict]:
+    import post_approval
+
     entries = review_policy.passes()
-    if reopened(pull, current):
-        return entries
+    approved = review_policy.covered(events)
     missing = {entry["id"] for entry in entries if entry["id"] not in current}
     files = (forge.change_files(pull.number) or []) if missing else []
     return [entry for entry in entries
-            if current.get(entry["id"], {}).get("state") != "approve"
+            if entry["id"] in approved and post_approval.stale(approved[entry["id"]], pull.head_sha, pull.fetch_ref)
+            or entry["id"] not in approved and current.get(entry["id"], {}).get("state") != "approve"
             and not (entry["id"] in missing and review_policy.prose_only(entry, files))]
-
-
-def approved_head(current: dict) -> str:
-    items = [current.get(entry["id"], {}) for entry in review_policy.passes()]
-    if not items or any(item.get("state") != "approve" for item in items):
-        return ""
-    return max(items, key=lambda item: moment(item["at"]))["sha"]
-
-
-def reopened(pull, current: dict) -> bool:
-    import post_approval
-
-    approved = approved_head(current)
-    return bool(approved and approved != pull.head_sha and not post_approval.judge(approved, pull.head_sha).accepted)
 
 
 def watching(root: Path, change: int) -> bool:
@@ -620,8 +615,8 @@ class Flow:
         return change_of(self.workspace, self.data, self.state)
 
     @cached_property
-    def history(self) -> tuple[dict, set[str]]:
-        return verdicts(self.pull) if self.pull else ({}, set())
+    def history(self) -> tuple[dict, set[str], list[tuple[str, str, str]]]:
+        return verdicts(self.pull) if self.pull else ({}, set(), [])
 
     @cached_property
     def current(self) -> dict:
@@ -633,7 +628,7 @@ class Flow:
 
     @cached_property
     def pending(self) -> list[dict]:
-        return pending_passes(self.pull, self.current) if self.pull and not unreviewed(self.state) else []
+        return pending_passes(self.pull, self.current, self.history[2]) if self.pull and not unreviewed(self.state) else []
 
     @cached_property
     def labels(self) -> set[str]:
@@ -712,9 +707,11 @@ class Flow:
         values = self.values(step, ChangeNumber=self.pull.number, CheckName=check_context(),
                              CheckUrl=getattr(check, "url", ""),
                              FixLines=post_approval.policy().get("lines", 0))
-        if state in ("", "pending", "skipped", "success"):
+        if state == "pending":
             return Step("gates-wait", text_templates.prompt("session/gates-wait", values), head=self.head,
                         counted=False)
+        if state in ("", "skipped", "success"):
+            return Step("gates-missing", text_templates.prompt("session/gates-missing", values), head=self.head)
         return self.step(step, text_templates.prompt("session/gates-fix", values))
 
     def merged(self, step: dict) -> Step | None:

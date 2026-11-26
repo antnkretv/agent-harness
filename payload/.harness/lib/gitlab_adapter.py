@@ -404,6 +404,16 @@ class GitLabForge(forge.Forge):
             self._same_status_pipeline(sha, pipeline)
         return found
 
+    def jobs(self, sha: str) -> list[forge.Check]:
+        found: dict[str, forge.Check] = {}
+        for pipeline in self._request("GET", query("pipelines", sha=sha, order_by="id", sort="desc", per_page=20)) or []:
+            for job in self._pages(f"pipelines/{quoted(pipeline['id'])}/jobs"):
+                name = job.get("name") or ""
+                if name and name not in found:
+                    found[name] = forge.Check(name, JOB_STATES.get(job.get("status"), "pending"), job.get("web_url") or "",
+                                              (job.get("user") or {}).get("username") or "", "job")
+        return list(found.values())
+
     def job_log(self, job: str) -> str:
         text, found = job.strip(), JOB_URL.search(job.strip())
         number = text if text.isdigit() else found.group(1) if found else ""
