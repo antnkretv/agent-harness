@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Modules/Sample/Sample.Domain/Sample.Domain.csproj" />
+  <Project Path="Modules/Sample/Sample.Application/Sample.Application.csproj" />
+  <Project Path="Modules/Sample/Sample.Infrastructure/Sample.Infrastructure.csproj" />
+</Solution>

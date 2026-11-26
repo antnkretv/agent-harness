@@ -1,0 +1,38 @@
+# Выпуск комплекта: тег v<версия> на master собирает архив и публикует его с файлом sha256 в выпуске
+# GitHub. Загрузчик проекта и ah upgrade скачивают архив по адресу выпуска, а lock проекта закрепляет sha256.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Tag on master
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/master || { echo "::error::тег $GITHUB_REF_NAME стоит не на коммите master"; exit 1; }
+      - name: Tag matches kit.json
+        run: |
+          version="$(python3 -c 'import json; print(json.load(open("kit.json"))["version"])')"
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "::error::тег $GITHUB_REF_NAME, а kit.json называет версию $version"; exit 1; }
+      - name: Build archive
+        run: |
+          python3 tools/kit.py build --out dist
+          cd dist && for archive in *.tar.gz; do sha256sum "$archive" > "$archive.sha256"; done
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/*.tar.gz.sha256 --verify-tag --title "$GITHUB_REF_NAME" --generate-notes

@@ -1,0 +1,7 @@
+.project-check:
+  stage: test
+  image: $HARNESS_CI_IMAGE
+  tags: {{harness.runner.check}}
+  interruptible: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

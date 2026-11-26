@@ -1,0 +1,19 @@
+name: Project check
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: false
+    runs-on: {{harness.runner.check}}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json

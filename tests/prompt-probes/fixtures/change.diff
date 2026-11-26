@@ -1,0 +1,87 @@
+diff --git a/.harness/lib/file_lock.py b/.harness/lib/file_lock.py
+--- a/.harness/lib/file_lock.py
++++ b/.harness/lib/file_lock.py
+@@ -7,7 +7,16 @@
+
+
+ class Busy(OSError):
+-    pass
++    def __init__(self, path: Path, holder: str = ""):
++        super().__init__(str(path))
++        self.holder = holder
++
++
++def holder(path: Path) -> str:
++    try:
++        return path.read_text(encoding="ascii").strip()
++    except OSError:
++        return ""
+
+
+ @contextmanager
+@@ -25,9 +34,12 @@
+             else:
+                 import fcntl
+                 fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
++                handle.truncate(0)
++                handle.write(str(os.getpid()).encode("ascii"))
++                handle.flush()
+         except OSError as error:
+             if error.errno in (errno.EACCES, errno.EAGAIN):
+-                raise Busy(str(path)) from error
++                raise Busy(path, "" if os.name == "nt" else holder(path)) from error
+             raise
+         try:
+             yield
+diff --git a/.harness/scripts/with-file-lock.py b/.harness/scripts/with-file-lock.py
+--- a/.harness/scripts/with-file-lock.py
++++ b/.harness/scripts/with-file-lock.py
+@@ -10,25 +10,37 @@
+
+ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+ from file_lock import Busy, locked
++from platform_messages import msg
++
++
++def exit_code(code: int) -> int:
++    return 128 - code if code < 0 else code
+
+
+ def main() -> int:
+     parser = argparse.ArgumentParser()
+     parser.add_argument("--message", default="")
++    parser.add_argument("--timeout", type=float, default=0.0)
+     parser.add_argument("lock", type=Path)
+     parser.add_argument("executable")
+     parser.add_argument("command", nargs=argparse.REMAINDER)
+     args = parser.parse_args()
+     args.lock.parent.mkdir(parents=True, exist_ok=True)
+     announced = False
++    deadline = time.monotonic() + args.timeout if args.timeout > 0 else None
+     while True:
+         try:
+             with locked(args.lock):
+-                return subprocess.call([args.executable, *args.command], env={**os.environ, "HARNESS_FILE_LOCK": str(args.lock.resolve())})
+-        except Busy:
++                code = subprocess.call([args.executable, *args.command], env={**os.environ, "HARNESS_FILE_LOCK": str(args.lock.resolve())})
++                return exit_code(code)
++        except Busy as busy:
+             if args.message and not announced:
+                 print(args.message, file=sys.stderr, flush=True)
+                 announced = True
++            if deadline is not None and time.monotonic() >= deadline:
++                holder = busy.holder or msg("lock_holder_unknown")
++                print(msg("lock_timeout", args.lock, holder, f"{args.timeout:g}"), file=sys.stderr)
++                return 2
+             time.sleep(0.2)
+
+
+diff --git a/.harness/messages.env b/.harness/messages.env
+--- a/.harness/messages.env
++++ b/.harness/messages.env
+@@ -203,3 +203,5 @@
+ MSG_perms_ledger_unwritten='решение хука запретов не записано в журнал сессии: %s'
+ MSG_gate_settings_read='Чтение .harness/settings.env закрыто агентам: файл держит токены и личные настройки человека. Нужную настройку назовите человеку, значение он задает сам.'
+ MSG_workspace_settings_copied='ссылку %s на settings.env основного клона создать нельзя (%s): лежит копия, и правку настроек основного клона копия задачи не увидит'
++MSG_lock_timeout='блокировка %s занята процессом %s дольше %s с'
++MSG_lock_holder_unknown='неизвестным'

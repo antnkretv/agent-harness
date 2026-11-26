@@ -1,0 +1,107 @@
+name: Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  check:
+    runs-on: {{harness.runner.check}}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - name: Detect toolchain
+        id: toolchain
+        run: |
+          set -euo pipefail
+          solution=$("$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/lib/manifest.py project/manifest.json .modules.backend.extensions.dotnet.solution || true)
+          echo "dotnet=$([ -n "$solution" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "node=$([ -f .node-version ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET
+        if: steps.toolchain.outputs.dotnet == 'true'
+        uses: ./.github/actions/setup-dotnet
+
+      - name: Cache NuGet packages
+        if: steps.toolchain.outputs.dotnet == 'true' && runner.environment == 'github-hosted'
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props', '**/Directory.Packages.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Setup Node.js
+        if: steps.toolchain.outputs.node == 'true'
+        uses: ./.github/actions/setup-node
+
+      - name: Setup Vale
+        if: hashFiles('.harness/provisioning/scripts/ensure-vale.sh') != ''
+        run: .harness/provisioning/scripts/ensure-vale.sh --ci
+
+      - name: Setup shellcheck
+        if: hashFiles('.harness/provisioning/scripts/ensure-shellcheck.sh') != ''
+        run: .harness/provisioning/scripts/ensure-shellcheck.sh --ci
+
+      - name: Check base
+        id: base
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          policy="$("$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/lib/manifest.py project/manifest.json .git.baseBranch)"
+          target="origin/${BASE_REF:-$policy}"
+          ref="$target"
+          case "$HEAD_REF" in release/*) ref="origin/$policy" ;; esac
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+
+      - name: Project phase
+        id: project
+        env:
+          HARNESS_BASE: ${{ steps.base.outputs.ref }}
+          HARNESS_TARGET: ${{ steps.base.outputs.target }}
+        run: |
+          set -euo pipefail
+          ran=false
+          for step in .harness/project/ci/check/*.sh; do
+            [ -f "$step" ] || continue
+            echo "::group::$step"
+            bash "$step" </dev/null
+            echo "::endgroup::"
+            ran=true
+          done
+          echo "apps=$ran" >> "$GITHUB_OUTPUT"
+
+      - name: Project gates
+        env:
+          HARNESS_BASE: ${{ steps.base.outputs.ref }}
+          HARNESS_TARGET: ${{ steps.base.outputs.target }}
+          APPS_CHECKED: ${{ steps.project.outputs.apps }}
+        run: |
+          set -euo pipefail
+          args=(--base "$HARNESS_BASE")
+          [ "$HARNESS_TARGET" = "$HARNESS_BASE" ] || args+=(--since "$HARNESS_TARGET")
+          [ "$APPS_CHECKED" != true ] || args+=(--gates-only)
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/check/check-all.py "${args[@]}"
+
+  project:
+    uses: ./.github/workflows/project-check.yml
+    secrets: inherit

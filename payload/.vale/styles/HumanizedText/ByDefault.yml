@@ -1,0 +1,7 @@
+extends: existence
+message: "\"%s\" - писать \"по умолчанию\" раздельно или \"значение по умолчанию\""
+scope: text
+level: error
+ignorecase: true
+tokens:
+  - '(?<!\bпо\s+)(?:по-)?умолчан\p{L}*'

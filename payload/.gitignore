@@ -1,0 +1,28 @@
+# harness:begin core
+.sessions/
+/.harness/kit
+*.harness-new
+{{harness.placed}}
+/.harness/settings.env
+/.claude/skills
+/.claude/rules/harness-*.md
+/.cursor/rules/harness-*.mdc
+.claude/worktrees/
+.vale-work/
+__pycache__/
+*.py[cod]
+.env
+.env.local
+.env.*.local
+*.secret
+{{#if stack:node}}
+node_modules/
+{{/if}}{{#if stack:dotnet}}
+bin/
+obj/
+TestResults/
+{{/if}}
+# harness:end core
+
+# project:begin
+# project:end

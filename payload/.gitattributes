@@ -1,0 +1,18 @@
+# project:begin
+# project:end
+
+# harness:begin core
+.agents/** text=auto eol=lf
+.claude/** text=auto eol=lf
+.codex/** text=auto eol=lf
+.config/** text=auto eol=lf
+.cursor/** text=auto eol=lf
+.githooks/** text=auto eol=lf
+.github/** text=auto eol=lf
+.gitlab/** text=auto eol=lf
+.gitlab-ci.yml text=auto eol=lf
+.harness/** text=auto eol=lf
+.specify/** text=auto eol=lf
+.vale/** text=auto eol=lf
+*.sh text eol=lf
+# harness:end core

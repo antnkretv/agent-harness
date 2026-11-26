@@ -1,0 +1,14 @@
+{
+  "snapshot_commit": "chore: пробный проект",
+  "install_commit": "chore: harness",
+  "change_commit": "fix: ожидание блокировки ограничено",
+  "review_reason": "проба промпта",
+  "review_change": "1",
+  "change_text_prompt": "Изменение ниже готово и проверено, PR по нему еще не открыт. Напиши описание этого PR: заполни слоты заготовки формы и сохрани результат в файл `{{BODY}}`. Собери описание командой `./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py render change/description --set-file ChangeBody={{BODY}}` и правь файл, пока команда не примет текст. PR не открывай и ничего не публикуй.\n\n## Задача\n\n{{TASK}}\n\n## Дифф изменения\n\nДифф в рабочем дереве не применен.\n\n```diff\n{{DIFF}}```\n\n## Журнал исполнителя\n\n{{CHECKS}}\n## Вывод `text_templates.py form ChangeBody`\n\n{{FORM}}\n\n## Вывод `text_templates.py show change/description`\n\n{{SHOW}}\n",
+  "change_text_prose": [
+    "Проблема",
+    "Что сделано",
+    "Что не сделано и почему"
+  ],
+  "change_text_checklist": "Чеклист"
+}

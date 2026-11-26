@@ -1,0 +1,1 @@
+Ревью завершено. Запусти ожидание мержа: ./.harness/hooks/python.cmd .harness/scripts/pipeline/task-worktree.py await-merge --change ${ChangeNumber} --detach. После мержа оно само уберет рабочую копию.

@@ -1,0 +1,92 @@
+workflow:
+  rules:
+    - if: $HARNESS_RELEASE_REQUEST
+      auto_cancel:
+        on_new_commit: none
+    - when: always
+
+.harness-release:
+  stage: deploy
+  image: $HARNESS_CI_IMAGE
+  before_script:
+    - python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+  tags: {{harness.runner.release}}
+  timeout: 30m
+  environment:
+    name: harness
+    action: access
+  variables:
+    GIT_DEPTH: "0"
+    HARNESS_DOTENV: $CI_PROJECT_DIR/harness.env
+
+.harness-release-deploy:
+  extends: .harness-release
+  needs: [harness-release-plan]
+  before_script:
+    - '[ "$RELEASE_MODE" != released ] || exit 0'
+    - '[ "$RELEASE_SHA" = "$CI_COMMIT_SHA" ] || git checkout --quiet --detach "$RELEASE_SHA"'
+    - python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+harness-release-plan:
+  extends: .harness-release
+  script:
+    - |
+      set -euo pipefail
+      args=()
+      case "${HARNESS_RELEASE_REQUEST:-}" in
+        "" | head) ;;
+        major) args+=(--major) ;;
+        *) args+=(--version "$HARNESS_RELEASE_REQUEST") ;;
+      esac
+      ./.harness/hooks/python.cmd .harness/scripts/release/release.py next "${args[@]}"
+  artifacts:
+    reports:
+      dotenv: harness.env
+
+harness-release-tag:
+  extends: .harness-release
+  needs: [harness-release-plan, harness-release-deploy]
+  variables:
+    GIT_DEPTH: "1"
+  script:
+    - |
+      set -euo pipefail
+      if [ "$RELEASE_MODE" != release ]; then
+        exit 0
+      fi
+      ./.harness/hooks/python.cmd .harness/lib/forge.py tag "$RELEASE_TAG" "$RELEASE_SHA"
+
+harness-release-back-merge:
+  extends: .harness-release
+  needs: [harness-release-plan, harness-release-tag]
+  script:
+    - |
+      set -euo pipefail
+      if [ "$RELEASE_MODE" != release ]; then
+        exit 0
+      fi
+      base_branch=$(./.harness/hooks/python.cmd .harness/lib/manifest.py project/manifest.json .git.baseBranch)
+      git fetch --quiet --no-tags origin "+refs/heads/$base_branch:refs/remotes/origin/$base_branch"
+      ./.harness/hooks/python.cmd .harness/scripts/release/release.py back-merge --release-token --tag "$RELEASE_TAG" --ref "$RELEASE_SHA"
+
+harness-release-report:
+  extends: .harness-release
+  needs: [harness-release-plan, harness-release-deploy, harness-release-tag, harness-release-back-merge]
+  when: always
+  script:
+    - |
+      set -euo pipefail
+      if [ -z "${RELEASE_MODE:-}" ] || [ "$RELEASE_MODE" = released ]; then
+        exit 0
+      fi
+      output() { sed -n "s/^$1=//p" "$HARNESS_DOTENV" | tail -n 1; }
+      base_branch=$(./.harness/hooks/python.cmd .harness/lib/manifest.py project/manifest.json .git.baseBranch)
+      git fetch --quiet --no-tags origin "+refs/heads/$base_branch:refs/remotes/origin/$base_branch"
+      body="$CI_PROJECT_DIR/release-report.md"
+      ./.harness/hooks/python.cmd .harness/scripts/release/release.py report --mode "$RELEASE_MODE" --tag "$RELEASE_TAG" \
+        --previous "$RELEASE_PREVIOUS" --ref "$RELEASE_SHA" --body-file "$body"
+{{#if module:notifications}}      NOTIFY_KIND=release NOTIFY_TITLE="$(output title)" NOTIFY_STATUS="$(output status)" NOTIFY_BODY="$(cat "$body")" .harness/notify/notify.sh
+{{/if}}      [ -z "$(output failed)" ]
+  artifacts:
+    reports:
+      dotenv: harness.env

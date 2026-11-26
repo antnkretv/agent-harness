@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup>
+    <ErrorLog>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'diagnostics.sarif')),version=2.1</ErrorLog>
+  </PropertyGroup>
+</Project>

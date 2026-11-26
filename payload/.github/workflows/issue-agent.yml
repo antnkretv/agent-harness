@@ -1,0 +1,135 @@
+name: issue-agent
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  pull_request_review_comment:
+    types: [created]
+  workflow_run:
+    workflows: [code-review]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  actions: read
+
+env:
+  AGENT_PROVIDER: '{{harness.extension.ci-agent}}'
+
+jobs:
+  gate:
+    if: >-
+      ${{ (github.event_name == 'workflow_run' && contains(github.event.workflow_run.display_title, 'run-review'))
+          || startsWith(github.event.comment.body, '@')
+          || startsWith(github.event.review.body, '@') }}
+    runs-on: {{harness.runner.agent}}
+    timeout-minutes: 5
+    outputs:
+      enabled: ${{ steps.gate.outputs.enabled }}
+      number: ${{ steps.gate.outputs.number }}
+      publisher_login: ${{ steps.publisher.outputs.publisher_login }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - name: publisher-account
+        id: publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/agent/agent-event.py account --output publisher_login
+
+      - name: agent-account
+        id: account
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_GITHUB_TOKEN }}
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/agent/agent-event.py account
+
+      - name: gate
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AGENT_LOGIN: ${{ steps.account.outputs.login }}
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/agent/agent-event.py gate --agent "$AGENT_LOGIN"
+
+  react:
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: {{harness.runner.agent}}
+    timeout-minutes: 60
+    concurrency:
+      group: issue-agent-${{ needs.gate.outputs.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      actions: read
+      checks: read
+      statuses: read
+    env:
+      GH_TOKEN: ${{ secrets.AGENT_GITHUB_TOKEN }}
+      GITHUB_CHECKS_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - name: agent-provider
+        run: |
+          set -euo pipefail
+          provider=$("$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/check/check-pipeline.py --emit-provider issue-agent)
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/lib/forge.py export-env "AGENT_PROVIDER=$provider"
+
+      - name: agent-cli
+        run: bash .harness/provisioning/scripts/ensure-agent-cli.sh "$AGENT_PROVIDER" --ci
+
+      - name: workdir
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/agent/agent-event.py workdir "$RUNNER_TEMP/agent-work"
+
+      - name: secret-slots
+        id: slots
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/lib/manifest.py --secret-slots tracker --slots 1 >> "$GITHUB_OUTPUT"
+
+      - name: agent
+        id: session
+        env:
+          PUBLISHER_LOGIN: ${{ needs.gate.outputs.publisher_login }}
+          SECRET_NAME_1: ${{ steps.slots.outputs.secret-1 }}
+          SECRET_VALUE_1: ${{ secrets[steps.slots.outputs.secret-1] }}
+          VAR_NAME_1: ${{ steps.slots.outputs.var-1 }}
+          VAR_VALUE_1: ${{ vars[steps.slots.outputs.var-1] }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/agent/agent-event.py session --workdir "$RUNNER_TEMP/agent-work" \
+            --log "$RUNNER_TEMP/agent-session.jsonl" --reviewer "$PUBLISHER_LOGIN"
+
+      - name: session-digest
+        if: always() && steps.session.outcome != 'skipped'
+        env:
+          PASS: issue-agent
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/agent/session-log-digest.py "$RUNNER_TEMP/agent-session.jsonl" "$AGENT_PROVIDER"

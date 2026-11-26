@@ -1,0 +1,160 @@
+"""Загрузчик agent-harness: ставит в кеш архив версии из .harness/state/lock.json и передает команду утилите ah.
+
+    python3 .harness/ah.py install [--archive <архив>]   # Windows: py -3 .harness/ah.py install
+    python3 .harness/ah.py upgrade [--version <версия>]  # новая версия комплекта: ветка, lock и PR
+
+Версии нет в кеше - загрузчик скачивает архив выпуска из kit.repository и сверяет его sha256 с lock.
+"""
+
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+CACHE = Path(os.environ.get("AGENT_HARNESS_CACHE") or Path.home() / ".cache" / "agent-harness")
+MSG_sha='ah: sha256 архива %s не совпадает с lock.json (%s)'
+MSG_unpinned='ah: в .harness/state/lock.json нет kit.sha256 и kit.tree: комплект ставится командой apply --archive'
+MSG_shape='ah: архив %s - не комплект agent-harness: в нем нет одного каталога с ah.py'
+MSG_no_archive='ah: после --archive нужен путь к архиву'
+MSG_built='ah: файлы архива %s не сходятся с kit.tree %s из lock.json'
+MSG_unbuilt='ah: kit.py build в исходнике %s не собрал архив'
+MSG_uncached='ah: версии %s нет в кеше %s или ее файлы там изменены: передайте архив флагом --archive'
+MSG_download='ah: архив выпуска %s не скачан: %s. Передайте архив флагом --archive'
+
+
+def msg(key: str, *args: object) -> str:
+    return globals()["MSG_" + key] % args
+
+
+def tree_digest(files) -> str:
+    return hashlib.sha256("".join(f"{name}\0{hashlib.sha256(data).hexdigest()}\n"
+                                  for name, data in sorted(files)).encode("utf-8")).hexdigest()
+
+
+def genuine(top: Path, tree: str) -> bool:
+    return (top / "ah.py").is_file() and tree_digest(
+        (path.relative_to(top).as_posix(), path.read_bytes()) for path in top.rglob("*") if path.is_file()) == tree
+
+
+def unpacked(archive: Path, home: Path, tree: str, sha: str = "") -> Path:
+    if sha and hashlib.sha256(archive.read_bytes()).hexdigest() != sha:
+        sys.exit(msg("sha", archive, sha))
+    CACHE.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix=".unpack-", dir=CACHE))
+    try:
+        with tarfile.open(archive) as tar:
+            tar.extractall(work, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
+        tops = [path for path in work.iterdir() if (path / "ah.py").is_file()]
+        if len(tops) != 1:
+            sys.exit(msg("shape", archive))
+        if not genuine(tops[0], tree):
+            sys.exit(msg("built", archive, tree))
+        try:
+            os.replace(tops[0], home)
+        except OSError:
+            if not genuine(home, tree):
+                try:
+                    os.replace(home, work / "stale")
+                except FileNotFoundError:
+                    pass
+                try:
+                    os.replace(tops[0], home)
+                except OSError:
+                    if not genuine(home, tree):
+                        raise
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return home
+
+
+def built(source: Path) -> Path:
+    CACHE.mkdir(parents=True, exist_ok=True)
+    out = Path(tempfile.mkdtemp(prefix=".build-", dir=CACHE))
+    if subprocess.run([sys.executable, str(source / "tools" / "kit.py"), "build", "--out", str(out)],
+                      stdout=subprocess.DEVNULL).returncode:
+        shutil.rmtree(out, ignore_errors=True)
+        sys.exit(msg("unbuilt", source))
+    (found,) = out.glob("*.tar.gz")
+    return found
+
+
+def release(kit: dict) -> str:
+    return f"{kit['repository']}/releases/download/v{kit['version']}/{kit['name']}-{kit['version']}.tar.gz"
+
+
+def downloaded(kit: dict) -> Path:
+    import urllib.request
+
+    url = release(kit)
+    CACHE.mkdir(parents=True, exist_ok=True)
+    handle, path = tempfile.mkstemp(prefix=".download-", suffix=".tar.gz", dir=CACHE)
+    try:
+        with os.fdopen(handle, "wb") as out, urllib.request.urlopen(url, timeout=120) as response:
+            shutil.copyfileobj(response, out)
+    except OSError:
+        Path(path).unlink(missing_ok=True)
+        raise
+    return Path(path)
+
+
+def main(args: list[str]) -> int:
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__)
+        return 0
+    kit = json.loads((ROOT / ".harness/state/lock.json").read_text(encoding="utf-8"))["kit"]
+    sha, tree = kit.get("sha256"), kit.get("tree")
+    if not sha or not tree:
+        sys.exit(msg("unpinned"))
+    archive = None
+    if "--archive" in args:
+        at = args.index("--archive")
+        if at + 1 == len(args):
+            sys.exit(msg("no_archive"))
+        archive = Path(args[at + 1])
+        del args[at:at + 2]
+    home = next((home for home in (CACHE / sha, CACHE / f"src-{tree}") if genuine(home, tree)), None)
+    if home is None and archive is not None:
+        home = unpacked(archive, CACHE / sha, tree, sha)
+    elif home is None and kit.get("source"):
+        archive = built(ROOT / kit["source"])
+        try:
+            home = unpacked(archive, CACHE / f"src-{tree}", tree)
+        finally:
+            shutil.rmtree(archive.parent, ignore_errors=True)
+    elif home is None and kit.get("repository"):
+        try:
+            archive = downloaded(kit)
+        except OSError as error:
+            sys.exit(msg("download", release(kit), error))
+        try:
+            home = unpacked(archive, CACHE / sha, tree, sha)
+        finally:
+            archive.unlink(missing_ok=True)
+    elif home is None:
+        sys.exit(msg("uncached", sha[:12], CACHE))
+    link = ROOT / ".harness" / "kit"
+    if os.path.realpath(link) != os.path.realpath(home) and os.name == "nt":
+        if link.is_symlink() or link.is_file():
+            link.unlink()
+        elif os.path.lexists(link):
+            os.rmdir(link)
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(home)], check=True, capture_output=True)
+    elif os.path.realpath(link) != os.path.realpath(home):
+        if os.path.lexists(link) and not link.is_symlink():
+            os.rmdir(link) if link.is_dir() else link.unlink()
+        fresh = link.with_name(f".kit.{os.getpid()}.harness-new")
+        fresh.unlink(missing_ok=True)
+        fresh.symlink_to(home, target_is_directory=True)
+        os.replace(fresh, link)
+    return subprocess.run([sys.executable, "-B", str(link / "ah.py"), *args, "--target", str(ROOT)],
+                          env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}).returncode
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

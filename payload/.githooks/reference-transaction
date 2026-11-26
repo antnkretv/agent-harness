@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -uo pipefail
+[ "${1:-}" = prepared ] && [ -n "${HARNESS_TASK_BRANCH:-}" ] || exit 0
+root="$(git rev-parse --show-toplevel)" || exit 1
+. "$root/.harness/scripts/ci-common.sh"
+harness_python "$root/.harness/scripts/pipeline/task-worktree.py" refs --phase "$1"

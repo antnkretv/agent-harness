@@ -1,0 +1,13 @@
+{
+  "installation": {
+    "csharp": "0.28.0"
+  },
+  "servers": [
+    {
+      "id": "csharp",
+      "extensions": [".cs"],
+      "languageIds": ["csharp"],
+      "rootPatterns": ["*.sln", "*.slnx", "*.csproj"]
+    }
+  ]
+}

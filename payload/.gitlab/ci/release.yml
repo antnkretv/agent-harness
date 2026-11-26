@@ -1,0 +1,32 @@
+variables:
+  HARNESS_RELEASE:
+    value: ""
+    description: Ручной релиз на {{git.releaseBranch}} - head (голова ветки), major (голова ветки с повышением major) или vX.Y.Z (откат на выпущенную версию); cut на {{git.baseBranch}} - срез release/vX.Y.Z и MR в {{git.releaseBranch}}; пусто - без релиза
+
+harness-release:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == "{{git.releaseBranch}}" && $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_COMMIT_BRANCH == "{{git.releaseBranch}}" && $CI_PIPELINE_SOURCE == "web" && $HARNESS_RELEASE && $HARNESS_RELEASE != "cut"
+  resource_group: harness-release
+  variables:
+    HARNESS_RELEASE_REQUEST: $HARNESS_RELEASE
+  trigger:
+    include:
+      - local: .gitlab/ci/release-pipeline.yml
+      - local: .gitlab/ci/project-deploy.yml
+    strategy: depend
+
+harness-release-cut:
+  extends: .harness-pipeline-account
+  stage: deploy
+  image: $HARNESS_CI_IMAGE
+  tags: {{harness.runner.release}}
+  timeout: 30m
+  rules:
+    - if: $CI_COMMIT_BRANCH == "{{git.baseBranch}}" && $CI_PIPELINE_SOURCE == "web" && $HARNESS_RELEASE == "cut"
+  resource_group: harness-release-cut
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - ./.harness/hooks/python.cmd .harness/scripts/release/release.py cut --push --release-token

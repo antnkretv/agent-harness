@@ -1,0 +1,44 @@
+name: Close issues
+
+on:
+  push:
+    branches:
+      - {{git.baseBranch}}
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+jobs:
+  close:
+    runs-on: {{harness.runner.release}}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - name: Resolve tracker token
+        id: slots
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/lib/manifest.py --secret-slots tracker --slots 1 >> "$GITHUB_OUTPUT"
+
+      - name: Close merged issues
+        env:
+          GH_TOKEN: ${{ secrets.ISSUE_LINK_TOKEN || github.token }}
+          SHA: ${{ github.sha }}
+          BEFORE: ${{ github.event.before }}
+          SECRET_NAME_1: ${{ steps.slots.outputs.secret-1 }}
+          SECRET_VALUE_1: ${{ secrets[steps.slots.outputs.secret-1] }}
+          VAR_NAME_1: ${{ steps.slots.outputs.var-1 }}
+          VAR_VALUE_1: ${{ vars[steps.slots.outputs.var-1] }}
+        run: |
+          code=0
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/lib/tracker.py close-merged --sha "$SHA" --before "$BEFORE" || code=$?
+          [ "$code" -eq 3 ] || exit "$code"

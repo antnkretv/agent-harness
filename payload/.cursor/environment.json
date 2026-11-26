@@ -1,0 +1,4 @@
+{
+  "install": "python3 .harness/ah.py install && bash .harness/provisioning/scripts/cloud-setup.sh",
+  "start": "bash .cursor/start.sh --steps"
+}

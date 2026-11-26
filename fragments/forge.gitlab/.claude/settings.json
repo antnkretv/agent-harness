@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*gitlab.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/hooks/forge-text-lint.py\" claude",
+            "timeout": 60
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/hooks/agent-gate.py\" claude tool",
+            "timeout": 60,
+            "type": "command"
+          }
+        ],
+        "matcher": "mcp__.*gitlab.*__update_merge_request"
+      }
+    ]
+  }
+}

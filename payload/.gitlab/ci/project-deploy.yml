@@ -1,0 +1,5 @@
+harness-release-deploy:
+  extends: .harness-release-deploy
+  script:
+    - >-
+      ./.harness/hooks/python.cmd .harness/scripts/release/release.py no-deploy --version "$RELEASE_VERSION"

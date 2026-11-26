@@ -1,0 +1,28 @@
+name: Setup .NET
+description: Устанавливает SDK из global.json каталога решения и проверяет выбранную версию.
+runs:
+  using: composite
+  steps:
+    - id: solution
+      shell: bash
+      run: |
+        solution=$("$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/lib/manifest.py project/manifest.json .modules.backend.extensions.dotnet.solution)
+        echo "dir=$(dirname "$solution")" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/setup-dotnet@v5
+      with:
+        global-json-file: ${{ steps.solution.outputs.dir }}/global.json
+        dotnet-quality: preview
+
+    - shell: bash
+      run: |
+        . .harness/provisioning/lib/dotnet.sh
+        dir="$(dotnet_vstest_artifacts_base)"
+        [ -z "$dir" ] || echo "VSTEST_ARTIFACTS_BASE_DIRECTORY=$dir" >> "$GITHUB_ENV"
+
+    - shell: bash
+      working-directory: ${{ steps.solution.outputs.dir }}
+      run: |
+        test "$(dotnet --version)" = "$(jq -r .sdk.version global.json)"
+        dotnet --info
+        dotnet --list-runtimes

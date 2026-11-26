@@ -1,0 +1,75 @@
+{
+	"permissions": {
+		"allow": [
+			"Bash(git push --force-with-lease*)",
+			"Bash(git push * --force-with-lease*)"
+		],
+		"deny": [
+			"Read(./.harness/settings.env)"
+		]
+	},
+	"hooks": {
+		"SessionStart": [
+			{
+				"matcher": "startup|resume",
+				"hooks": [
+					{
+						"command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh",
+						"statusMessage": "Настройка окружения (toolchain из манифеста проекта)...",
+						"timeout": 900,
+						"type": "command"
+					}
+				]
+			}
+		],
+		"PostToolUse": [
+			{
+				"matcher": "Edit|Write",
+				"hooks": [
+					{
+						"command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/comments-file.sh\"",
+						"shell": "bash",
+						"statusMessage": "Слой комментариев по изменённому файлу…",
+						"timeout": 120,
+						"type": "command"
+					}
+				]
+			}
+		],
+		"UserPromptSubmit": [
+			{
+				"hooks": [
+					{
+						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/hooks/agent-gate.py\" claude prompt",
+						"timeout": 60,
+						"type": "command"
+					}
+				]
+			}
+		],
+		"PreToolUse": [
+			{
+				"matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+				"hooks": [
+					{
+						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/hooks/agent-gate.py\" claude tool",
+						"timeout": 60,
+						"type": "command"
+					}
+				]
+			}
+		],
+		"Stop": [
+			{
+				"hooks": [
+					{
+						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/hooks/agent-gate.py\" claude stop",
+						"statusMessage": "Конвейер разработки: следующий шаг…",
+						"timeout": 180,
+						"type": "command"
+					}
+				]
+			}
+		]
+	}
+}

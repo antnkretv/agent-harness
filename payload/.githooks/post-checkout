@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -uo pipefail
+[ "${3:-0}" = 1 ] || exit 0
+git ls-files --error-unmatch .harness/methodology.json >/dev/null 2>&1 && exit 0
+git diff --quiet "$1" "$2" -- .harness/state/lock.json .harness/project/manifest.json 2>/dev/null && [ -e "$(git rev-parse --git-path harness/installed.json)" ] && exit 0
+root="$(git rev-parse --show-toplevel)" || exit 1
+"$(command -v python3 || command -v python)" "$root/.harness/ah.py" install >&2

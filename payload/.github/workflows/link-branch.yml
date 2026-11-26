@@ -1,0 +1,54 @@
+name: Link branch
+
+on:
+  create:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: link-branch-${{ github.event_name == 'create' && github.event.ref || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  link:
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' || github.event.ref_type == 'branch')
+      && !startsWith(github.ref_name, 'link-probe/') && !startsWith(github.ref_name, 'release/')
+      && !startsWith(github.ref_name, 'back-merge/') }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: read
+    runs-on: {{harness.runner.check}}
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Install harness kit
+        run: python3 .harness/ah.py install || git ls-files --error-unmatch .harness/methodology.json
+
+      - name: Link branch to issue
+        timeout-minutes: 6
+        env:
+          GH_TOKEN: ${{ secrets.ISSUE_LINK_TOKEN || secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.event_name == 'create' && github.event.ref || github.ref_name }}
+          LINK_RECOVERY: ${{ runner.temp }}/link-branch-recovery.json
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/pipeline/link-branch.py
+
+      - name: Restore branch
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ secrets.ISSUE_LINK_TOKEN || secrets.GITHUB_TOKEN }}
+          LINK_RECOVERY: ${{ runner.temp }}/link-branch-recovery.json
+        run: >-
+          "$GITHUB_WORKSPACE/.harness/hooks/python.cmd" .harness/scripts/pipeline/link-branch.py --restore

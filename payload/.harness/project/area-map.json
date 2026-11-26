@@ -1,0 +1,128 @@
+{
+  "areas": {
+    "docs": {
+      "deploy": false,
+      "prefixes": [
+        "docs/",
+        "specs/",
+        "README.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "CONTRIBUTING.md",
+        "REVIEW.md"
+      ]
+    },
+    "agents": {
+      "deploy": false,
+      "prefixes": [
+        ".agents/",
+        ".claude/",
+        ".codex/",
+        ".specify/",
+        ".cursor/"
+      ]
+    }
+  },
+  "shared": [
+    {
+      "prefixes": [
+        ".harness/hooks/",
+        ".harness/lib/hook.sh"
+      ],
+      "consumers": [
+        "agents"
+      ],
+      "why": "общая реализация хуков и ее контракт меняют поведение агентов, а не сборку приложений"
+    },
+    {
+      "prefixes": [
+        ".github/workflows/",
+        ".gitlab/",
+        ".gitlab-ci.yml",
+        ".githooks/"
+      ],
+      "consumers": "deploy",
+      "why": "правка конвейера или хука меняет способ проверки каждой области с выкатом"
+    },
+    {
+      "prefixes": [
+        ".github/workflows/issue-agent.yml",
+        ".github/workflows/code-review.yml",
+        ".github/workflows/alert-triage.yml",
+        ".gitlab/ci/events.yml",
+        ".gitlab/ci/review.yml",
+        ".gitlab/ci/review-round.yml",
+        ".gitlab/ci/agent.yml"
+      ],
+      "consumers": [],
+      "why": "агентные конвейеры не участвуют в сборке; их синтаксис держит гейт workflow-shell, он идет всегда"
+    },
+    {
+      "prefixes": [
+        ".harness/mcp-stand/"
+      ],
+      "consumers": [],
+      "why": "инструмент стенда ставится на стенд и не меняет ни сборку, ни проверки областей"
+    },
+    {
+      "prefixes": [
+        ".harness/scripts/",
+        ".harness/project/area-map.json"
+      ],
+      "consumers": [
+        "docs",
+        "agents"
+      ],
+      "why": "здесь живет реализация гейтов и сама карта: правка обязана прогнать то, что она проверяет"
+    },
+    {
+      "prefixes": [
+        ".vale.ini",
+        ".vale/"
+      ],
+      "consumers": [
+        "docs"
+      ],
+      "why": "правила проверки текстов - механический слой области docs"
+    },
+    {
+      "prefixes": [
+        ".harness/pipelines.json",
+        ".harness/prompts/",
+        ".harness/templates/",
+        ".harness/review/",
+        ".harness/README.md",
+        ".harness/methodology.json",
+        ".harness/state/"
+      ],
+      "consumers": [
+        "docs",
+        "agents"
+      ],
+      "why": "манифест конвейера, промпты, шаблоны публикуемых текстов, планки ревью, реестр правил и lock.json harness задают разбор PR, а не сборку области"
+    },
+    {
+      "prefixes": [
+        ".github/pull_request_template.md",
+        ".gitlab/merge_request_templates/",
+        ".github/ISSUE_TEMPLATE.md",
+        ".harness/issue-template.md"
+      ],
+      "consumers": [
+        "docs"
+      ],
+      "why": "шаблон обращения - человеческий текст области docs"
+    },
+    {
+      "prefixes": [
+        ".harness/"
+      ],
+      "consumers": "deploy",
+      "why": "манифест проекта называет решение и состав приложений, по которым проверяется каждая область с выкатом"
+    }
+  ],
+  "default": {
+    "consumers": "deploy",
+    "why": "неописанный путь поднимает проверки всех областей с выкатом: забытая запись стоит одного лишнего прогона, обратное поведение по умолчанию стоило бы пропущенной поломки"
+  }
+}

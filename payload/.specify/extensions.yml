@@ -1,0 +1,10 @@
+installed: []
+settings:
+  auto_execute_hooks: true
+hooks:
+  # Рыночная сверка
+  before_clarify:
+    - extension: harness
+      command: speckit.market
+      optional: false
+      enabled: true

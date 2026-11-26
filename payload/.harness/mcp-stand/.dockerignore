@@ -1,0 +1,9 @@
+*
+!Dockerfile
+!requirements.txt
+!server.py
+!oauth.py
+!policy.py
+!dispatcher.py
+!messages.py
+!messages.env

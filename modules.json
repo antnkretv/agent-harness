@@ -1,0 +1,791 @@
+{
+  "agents": {
+    "cli": {
+      "shape": "object",
+      "kind": "decision",
+      "required": true,
+      "default": {
+        "claudeVersion": "2.1.280",
+        "codexVersion": "0.162.1",
+        "cursorVersion": "2026.10.22-27dcf5f",
+        "nodeVersion": "24.22.0"
+      },
+      "title": "Версии CLI агентов и Node.js",
+      "rule": "объект с ключами: claudeVersion - версия Claude Code, codexVersion - версия Codex CLI, cursorVersion - версия Cursor Agent CLI, nodeVersion - версия Node.js, когда в репозитории нет .node-version; по ним старт сессии и CI ставят CLI; например {\"nodeVersion\": \"24.22.0\"}",
+      "static": true
+    },
+    "tools": {
+      "shape": "object",
+      "kind": "decision",
+      "required": true,
+      "default": {
+        "issue-agent": {
+          "allowedTools": "Read,Grep,Glob,TodoWrite,Task,Skill,Edit,Write,Bash(git:*),Bash(npm:*),Bash(dotnet:*),Bash(./.harness/hooks/python.cmd:*),Bash(.harness/hooks/python.cmd:*)",
+          "disallowedTools": "Bash(git push --force:*),Bash(git push -f:*)"
+        },
+        "alert-triage": {
+          "allowedTools": "Read,Grep,Glob,TodoWrite,Task,Skill,Edit,Write,Bash(git:*),Bash(npm:*),Bash(dotnet:*),Bash(./.harness/hooks/python.cmd:*),Bash(.harness/hooks/python.cmd:*)",
+          "disallowedTools": "Bash(git push --force:*),Bash(git push -f:*),Bash(gh pr merge:*),Bash(gh issue close:*),Bash(./.harness/hooks/python.cmd .harness/lib/tracker.py update:*),Bash(.harness/hooks/python.cmd .harness/lib/tracker.py update:*),Bash(./.harness/hooks/python.cmd .harness/lib/forge.py ready:*),Bash(.harness/hooks/python.cmd .harness/lib/forge.py ready:*),Bash(./.harness/hooks/python.cmd .harness/lib/forge.py tag:*),Bash(.harness/hooks/python.cmd .harness/lib/forge.py tag:*),Bash(python3 .harness/lib/tracker.py update:*),Bash(python3 .harness/lib/forge.py ready:*),Bash(python3 .harness/lib/forge.py tag:*)"
+        }
+      },
+      "title": "Инструменты агентов в CI",
+      "rule": "записи по процессу: issue-agent - агент задач, alert-triage - разбор алертов; поля allowedTools и disallowedTools - разрешенные и запрещенные инструменты агента через запятую; модель и усилие задает комплект по ответу о модели в CI",
+      "static": true
+    }
+  },
+  "order": [
+    "backend",
+    "frontend",
+    "forge",
+    "tracker",
+    "agents",
+    "ci-agent",
+    "review",
+    "issue-agent",
+    "stands",
+    "mcp",
+    "alert-triage",
+    "githooks",
+    "sdd",
+    "prose",
+    "skills",
+    "secrets",
+    "shell",
+    "release",
+    "runners",
+    "notifications"
+  ],
+  "modules": {
+    "backend": {
+      "title": "Бэкенд",
+      "question": "На каком стеке бэкенд проекта?",
+      "select": {"min": 0},
+      "off": {
+        "reason": "в проекте нет бэкенда",
+        "replacement": "не требуется, проверять нечего"
+      },
+      "extensions": {
+        "dotnet": {
+          "title": ".NET",
+          "detect": {"files": ["*.sln", "*.slnx", "*.csproj"]},
+          "settings": {
+            "solution": {
+              "shape": "text", "kind": "fact", "required": true,
+              "title": "Решение .NET",
+              "rule": "файл .sln или .slnx, который собирает CI; если их несколько - тот, что указан в задании проверки",
+              "detect": {"files": ["*.sln", "*.slnx"]}
+            },
+            "configuration": {
+              "shape": "text", "kind": "decision", "default": "Release",
+              "title": "Конфигурация сборки",
+              "rule": "конфигурация MSBuild, в которой check приложения собирает и тестирует решение, а гейт build-diagnostics читает журнал диагностик; например Release"
+            },
+            "suppressions": {
+              "shape": "records", "fields": {"required": ["suppressor", "rule"]}, "kind": "decision", "default": [],
+              "title": "Программные подавители проекта",
+              "rule": "записи с полями: suppressor - идентификатор подавления своего DiagnosticSuppressor, rule - диагностика, которую он подавляет; их подавления засчитывает check-build-diagnostics.py; например {\"suppressor\": \"APPS0001\", \"rule\": \"CA1812\"}; пусто - засчитываются только подавители, объявленные в исходниках решения"
+            }
+          }
+        },
+        "node": {
+          "title": "Node.js и TypeScript",
+          "detect": {"files": ["package.json"]},
+          "settings": {
+            "rules": {
+              "shape": "texts", "kind": "decision", "default": [],
+              "title": "Обязательные правила ESLint",
+              "rule": "пути модулей от корня репозитория; каждый экспортирует required, конфиг ESLint каждого приложения стороны его импортирует, и гейт node-adapter держит его правила на каждом исходнике; например .config/eslint/typescript.js; пусто - гейт сверяет только слои"
+            }
+          }
+        }
+      }
+    },
+    "frontend": {
+      "title": "Фронтенд",
+      "question": "На каком стеке фронтенд проекта?",
+      "select": {"min": 1, "max": 1},
+      "off": {
+        "reason": "в проекте нет фронтенда",
+        "replacement": "не требуется, проверять нечего"
+      },
+      "extensions": {
+        "node": {
+          "title": "Node.js и TypeScript",
+          "detect": {"files": ["package.json"]},
+          "settings": {
+            "rules": {
+              "shape": "texts", "kind": "decision", "default": [],
+              "title": "Обязательные правила ESLint",
+              "rule": "пути модулей от корня репозитория; каждый экспортирует required, конфиг ESLint каждого приложения стороны его импортирует, и гейт node-adapter держит его правила на каждом исходнике; например .config/eslint/typescript.js; пусто - гейт сверяет только слои"
+            }
+          }
+        }
+      }
+    },
+    "forge": {
+      "title": "Поставщик кода",
+      "question": "Где лежат репозиторий и CI/CD проекта?",
+      "select": {"min": 1, "max": 1},
+      "off": {
+        "reason": "репозиторий без поставщика кода: нет CI, PR и меток",
+        "replacement": "гейты дерева запускаются вручную: ./.harness/hooks/python.cmd .harness/scripts/check/check-all.py --base origin/<базовая ветка>; круг ревью - локальный, скилл review"
+      },
+      "extensions": {
+        "github": {
+          "title": "GitHub",
+          "about": "CI на GitHub Actions, шаблон PR и адаптер API",
+          "adapter": "github_adapter.GitHubForge",
+          "changeTemplate": ".github/pull_request_template.md",
+          "detect": {"remote": "github\\.com"},
+          "settings": {
+            "repo": {
+              "shape": "text", "kind": "fact", "required": true, "pattern": "[\\w.-]+/[\\w.-]+",
+              "title": "Репозиторий GitHub",
+              "rule": "owner/name из git remote get-url origin; например acme/shop",
+              "detect": {"remote": "github"}
+            },
+            "url": {
+              "shape": "text", "kind": "decision", "default": "https://github.com", "pattern": "https?://\\S+",
+              "title": "Адрес сервера GitHub",
+              "rule": "адрес со схемой: https://github.com или адрес своего GitHub Enterprise Server; например https://github.example.com; в CI его заменяет GITHUB_SERVER_URL"
+            }
+          }
+        },
+        "gitlab": {
+          "title": "GitLab",
+          "about": "CI на GitLab CI/CD, шаблон MR и адаптер API",
+          "adapter": "gitlab_adapter.GitLabForge",
+          "changeTemplate": ".gitlab/merge_request_templates/Default.md",
+          "detect": {"remote": "gitlab"},
+          "secrets": ["GITLAB_TOKEN"],
+          "secretsUse": "задания конвейера комплекта GitLab: события, публикация круга ревью, закрытие задач; нужен с первого события, круга ревью в CI или мержа",
+          "settings": {
+            "project": {
+              "shape": "text", "kind": "fact", "required": true, "pattern": "[\\w.-]+(?:/[\\w.-]+)+",
+              "title": "Проект GitLab",
+              "rule": "путь проекта из git remote get-url origin: group/name, с подгруппами - group/subgroup/name",
+              "detect": {"remote": "gitlab"}
+            },
+            "url": {
+              "shape": "text", "kind": "fact", "default": "https://gitlab.com", "pattern": "https?://\\S+",
+              "title": "Адрес сервера GitLab",
+              "rule": "схема и хост из git remote get-url origin; например https://gitlab.com или https://gitlab.example.com",
+              "detect": {"remote": "gitlab", "server": true}
+            }
+          }
+        }
+      }
+    },
+    "tracker": {
+      "title": "Трекер задач",
+      "secretsUse": "задание закрытия задач после мержа; нужен с первого мержа запроса, который закрывает задачу ссылкой Closes",
+      "question": "Где ведутся задачи проекта?",
+      "select": {"min": 1, "max": 1},
+      "off": {
+        "reason": "в проекте нет трекера задач",
+        "replacement": "ветки задач и связь PR с задачей держит автор PR, гейт их не проверяет; задачи после мержа закрывает автор вручную"
+      },
+      "extensions": {
+        "github-issues": {
+          "title": "GitHub Issues",
+          "adapter": "github_adapter.GitHubIssues",
+          "issueTemplate": ".github/ISSUE_TEMPLATE.md",
+          "detect": {"remote": "github\\.com"},
+          "settings": {
+            "repo": {
+              "shape": "text", "kind": "fact", "required": true, "pattern": "[\\w.-]+/[\\w.-]+",
+              "title": "Репозиторий задач",
+              "rule": "owner/name репозитория, в котором заводятся задачи; обычно тот же, что у поставщика кода",
+              "detect": {"remote": "github"}
+            }
+          }
+        },
+        "jira": {
+          "title": "Jira",
+          "about": "Jira Cloud или Jira Data Center: форма задачи и адаптер API",
+          "adapter": "jira_adapter.JiraTracker",
+          "issueTemplate": ".harness/issue-template.md",
+          "settings": {
+            "url": {
+              "shape": "text", "kind": "decision", "required": true, "pattern": "https?://\\S+",
+              "title": "Адрес Jira",
+              "rule": "адрес сайта Jira со схемой; например https://acme.atlassian.net у Jira Cloud или https://jira.example.com у Jira Data Center"
+            },
+            "projects": {
+              "shape": "texts", "kind": "decision", "required": true,
+              "title": "Ключи проектов Jira",
+              "rule": "ключи проектов Jira, задачи которых ведет проект; первый - проект новых задач; например PROJ"
+            },
+            "user": {
+              "shape": "text", "kind": "decision", "sources": ["literal", "env"], "default": "",
+              "title": "Учетная запись Jira",
+              "rule": "почта владельца классического токена API Jira Cloud, у Jira Cloud обязательна; пусто - вход персональным токеном Jira Data Center в заголовке Bearer"
+            },
+            "token": {
+              "shape": "text", "kind": "decision", "sources": ["secret"], "default": {"secret": "JIRA_TOKEN"},
+              "title": "Токен Jira",
+              "rule": "имя секрета CI, а не значение: в секрете токен API Jira Cloud или персональный токен Jira Data Center; например JIRA_TOKEN"
+            },
+            "issueType": {
+              "shape": "text", "kind": "decision", "default": "Task",
+              "title": "Тип новых задач Jira",
+              "rule": "тип задачи Jira, с которым конвейер заводит новые задачи; например Task; пусто - Task"
+            },
+            "doneTransition": {
+              "shape": "text", "kind": "decision", "default": "",
+              "title": "Переход закрытия задачи Jira",
+              "rule": "имя перехода Jira, которым задание закрытия закрывает задачу после мержа запроса; например Готово; пусто - единственный переход задачи в статус категории done"
+            }
+          }
+        }
+      }
+    },
+    "agents": {
+      "title": "Агенты разработки",
+      "question": "Какие модели вы используете для разработки?",
+      "select": {"min": 1},
+      "required": true,
+      "settings": {
+        "findings": {
+          "shape": "choice",
+          "values": {
+            "same-pr": "агент чинит находку в этом же PR",
+            "separate-pr": "агент чинит ее отдельным PR",
+            "report": "агент называет находку в PR и не чинит",
+            "ignore": "агент находку не трогает"
+          },
+          "kind": "decision",
+          "default": "same-pr",
+          "title": "Попутные находки вне постановки"
+        },
+        "review": {
+          "shape": "choice",
+          "values": {
+            "ci": "круги ревью идут в CI, локальный круг заменяет недоступный и Ready не дает",
+            "local": "круги ревью идут локально независимыми агентами сессии и доводят PR до Ready"
+          },
+          "kind": "decision",
+          "default": "ci",
+          "title": "Круги ревью сессии по умолчанию"
+        },
+        "pushback": {
+          "shape": "choice",
+          "values": {
+            "full": "агент проверяет каждое утверждение постановки и предлагает лучшее решение",
+            "critical": "агент оспаривает только отклонения от архитектуры, требований и логики",
+            "none": "агент не спорит и делает, как сказал человек"
+          },
+          "kind": "decision",
+          "default": "critical",
+          "title": "Спор агента с постановщиком задачи"
+        },
+        "envScript": {
+          "shape": "text", "kind": "fact", "default": "",
+          "title": "Скрипт окружения запуска проекта",
+          "rule": "скрипт проекта от корня репозитория, который по --export печатает команды export окружения запуска стека: профиль Bash, файл окружения удаленной сессии и серверы MCP с командой подключают его после общего тулчейна; пусто - только общий тулчейн"
+        }
+      },
+      "extensions": {
+        "claude-code": {"title": "Claude Code", "detect": {"paths": [".claude/", "CLAUDE.md"]}},
+        "codex": {"title": "Codex", "detect": {"paths": [".codex/"]}},
+        "cursor": {"title": "Cursor", "detect": {"paths": [".cursor/"]}}
+      }
+    },
+    "runners": {
+      "title": "Раннеры CI",
+      "question": "На каких раннерах идут задания CI?",
+      "requires": ["forge"],
+      "select": {"min": 1, "max": 1},
+      "off": {
+        "reason": "проект не назначает раннеры заданиям CI",
+        "replacement": "задания идут на раннерах площадки по умолчанию: ubuntu-latest у GitHub, раннеры без тегов у GitLab"
+      },
+      "extensions": {
+        "github-actions": {
+          "title": "GitHub Actions",
+          "about": "размещенные GitHub и свои раннеры по меткам runs-on",
+          "requires": ["forge/github"],
+          "settings": {
+            "check": {
+              "shape": "texts", "kind": "decision", "default": ["ubuntu-latest"],
+              "title": "Метки заданий проверки",
+              "rule": "метки runs-on заданий проверки, привязки ветки и входов ревью; например ubuntu-latest или self-hosted, build; пусто - задание не запустится, нужна хотя бы одна метка"
+            },
+            "review": {
+              "shape": "texts", "kind": "decision", "requires": ["review"], "default": ["ubuntu-latest"],
+              "title": "Метки заданий круга ревью",
+              "rule": "метки runs-on заданий круга ревью; например ubuntu-latest или self-hosted, code-review; пусто - задание не запустится, нужна хотя бы одна метка"
+            },
+            "agent": {
+              "shape": "texts", "kind": "decision", "requires": ["issue-agent"], "default": ["ubuntu-latest"],
+              "title": "Метки заданий агента задач",
+              "rule": "метки runs-on заданий агента задач; например ubuntu-latest или self-hosted, agent; пусто - задание не запустится, нужна хотя бы одна метка"
+            },
+            "triage": {
+              "shape": "texts", "kind": "decision", "requires": ["alert-triage"], "default": ["ubuntu-latest"],
+              "title": "Метки заданий разбора алертов",
+              "rule": "метки runs-on заданий разбора алертов; например ubuntu-latest или self-hosted, triage; пусто - задание не запустится, нужна хотя бы одна метка"
+            },
+            "release": {
+              "shape": "texts", "kind": "decision", "requires": ["release"], "default": ["ubuntu-latest"],
+              "title": "Метки заданий релиза и выкладки",
+              "rule": "метки runs-on заданий релиза, среза релиза и выкладки; например ubuntu-latest или self-hosted, build; пусто - задание не запустится, нужна хотя бы одна метка"
+            },
+            "variables": {
+              "shape": "object", "kind": "decision", "default": {},
+              "title": "Переменные репозитория с метками заданий",
+              "rule": "объект вид задания => имя переменной репозитория с метками runs-on в JSON; виды: check, review, agent, triage, release; заданная переменная заменяет метки вида, пустая - нет; например {\"triage\": \"TRIAGE_RUNS_ON\"}; пусто - метки только из настроек вида"
+            }
+          }
+        },
+        "gitlab-runner": {
+          "title": "GitLab Runner",
+          "about": "общие и свои раннеры по тегам заданий",
+          "requires": ["forge/gitlab"],
+          "settings": {
+            "check": {
+              "shape": "texts", "kind": "decision", "default": [],
+              "title": "Теги заданий проверки",
+              "rule": "теги заданий проверки и событий; например docker; пусто - раннер, который берет задания без тегов"
+            },
+            "review": {
+              "shape": "texts", "kind": "decision", "requires": ["review"], "default": [],
+              "title": "Теги заданий круга ревью",
+              "rule": "теги заданий круга ревью; например docker, review; пусто - раннер, который берет задания без тегов"
+            },
+            "agent": {
+              "shape": "texts", "kind": "decision", "requires": ["issue-agent"], "default": [],
+              "title": "Теги заданий агента задач",
+              "rule": "теги заданий агента задач; например docker, agent; пусто - раннер, который берет задания без тегов"
+            },
+            "release": {
+              "shape": "texts", "kind": "decision", "requires": ["release"], "default": [],
+              "title": "Теги заданий релиза",
+              "rule": "теги заданий релиза и выкладки; например docker, deploy; пусто - раннер, который берет задания без тегов"
+            }
+          }
+        }
+      }
+    },
+    "ci-agent": {
+      "title": "Агент в CI",
+      "secretsUse": "сессии агента в CI: ревью, агент задач и разбор алертов; нужны с первого запуска любого из них",
+      "question": "Какую модель вы используете в CI?",
+      "requires": ["forge"],
+      "select": {"min": 1, "max": 1},
+      "off": {
+        "reason": "агентов в CI нет",
+        "replacement": "ревью и задачи ведет агент разработки локально, алерты разбирает дежурный по уведомлениям"
+      },
+      "extensions": {
+        "claude-code": {"title": "Claude Code", "secrets": ["CLAUDE_CODE_OAUTH_TOKEN"]},
+        "codex": {
+          "title": "Codex",
+          "about": "вход ключом API или сессией ChatGPT своего раннера",
+          "settings": {
+            "auth": {
+              "shape": "choice", "kind": "decision",
+              "values": {"api-key": "ключ API из секрета CODEX_API_KEY", "chatgpt": "сессия ChatGPT в CODEX_HOME/auth.json своего раннера"},
+              "default": "api-key",
+              "secrets": {"api-key": ["CODEX_API_KEY"]},
+              "title": "Вход Codex"
+            }
+          }
+        },
+        "cursor": {"title": "Cursor Agent CLI", "secrets": ["CURSOR_API_KEY"]}
+      }
+    },
+    "review": {
+      "title": "Ревью PR агентами в CI",
+      "secretsUse": "проходы и публикация круга ревью в CI; нужны с первой метки круга ревью на запросе",
+      "question": "Проводить ли круг ревью PR в CI?",
+      "requires": ["forge", "ci-agent"],
+      "forgeSecrets": {"gitlab": ["GITLAB_READ_TOKEN"]},
+      "select": {"max": 0},
+      "off": {
+        "reason": "круг ревью в CI не подключен",
+        "replacement": "ревью идет локальным кругом скилла review независимыми агентами"
+      }
+    },
+    "issue-agent": {
+      "title": "Агент задач в CI",
+      "secretsUse": "агент задач в CI; нужны с первого обращения к агенту в задаче или запросе",
+      "question": "Отвечать ли агенту в CI на обращения и доводить PR после ревью?",
+      "requires": ["forge", "tracker", "ci-agent"],
+      "forgeSecrets": {"github": ["AGENT_GITHUB_TOKEN"], "gitlab": ["AGENT_GITLAB_TOKEN"]},
+      "select": {"max": 0},
+      "off": {
+        "reason": "агент задач в CI не подключен",
+        "replacement": "задачу и PR ведет агент разработчика скиллом issue-dev"
+      }
+    },
+    "stands": {
+      "title": "Диагностика стендов через MCP",
+      "secretsUse": "серверы MCP стендов в заданиях агентов CI; нужны с первого задания агента, которое читает стенд",
+      "question": "Читать ли агентам диагностику стендов проекта через MCP?",
+      "select": {"min": 1, "max": 1},
+      "off": {
+        "reason": "агенты не читают стенды через MCP",
+        "replacement": "журналы и телеметрию стенда агенту передает человек"
+      },
+      "extensions": {
+        "mcp-stand": {
+          "title": "mcp-stand",
+          "about": "сервер MCP только для чтения: экземпляр на стенд, вход OAuth владельца или токен CI",
+          "settings": {
+            "list": {
+              "shape": "records", "fields": {"required": ["name", "url"], "optional": ["token"], "secrets": ["token"]}, "kind": "decision", "default": [],
+              "title": "Стенды",
+              "rule": "записи с полями: name - имя сервера MCP у агентов, url - адрес <public_url>/mcp экземпляра, token - необязательное имя секрета CI с токеном агентов в CI; например {\"name\": \"app-production\", \"url\": \"https://stand.example.com/mcp\"}; пусто - серверов стендов нет"
+            }
+          }
+        }
+      }
+    },
+    "mcp": {
+      "title": "Внешние серверы MCP агентов",
+      "question": "Какие внешние серверы MCP нужны агентам разработки?",
+      "select": {"min": 1},
+      "off": {
+        "reason": "агенты разработки работают без внешних серверов MCP",
+        "replacement": "документацию и веб агенты ищут встроенными инструментами своего клиента"
+      },
+      "extensions": {
+        "context7": {
+          "title": "Context7",
+          "about": "актуальная документация библиотек по версиям",
+          "server": {"url": "https://mcp.context7.com/mcp"}
+        },
+        "parallel-search": {
+          "title": "Parallel Search",
+          "about": "поиск в вебе",
+          "server": {"url": "https://search-mcp.parallel.ai/mcp"}
+        },
+        "docker": {
+          "title": "Docker MCP Gateway",
+          "about": "шлюз к серверам каталога Docker MCP",
+          "detect": {"files": ["Dockerfile", "Dockerfile.*", "*.Dockerfile", "compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"]},
+          "server": {"command": "docker", "args": ["mcp", "gateway", "run"], "ensure": ["ensure-docker-mcp.sh", "--wait", "240"], "timeout": 300}
+        },
+        "refero": {
+          "title": "Refero",
+          "about": "образцы интерфейсов",
+          "requires": ["frontend"],
+          "server": {"url": "https://api.refero.design/mcp"}
+        },
+        "mobbin": {
+          "title": "Mobbin",
+          "about": "образцы интерфейсов приложений",
+          "requires": ["frontend"],
+          "server": {"url": "https://api.mobbin.com/mcp"}
+        },
+        "aspire": {
+          "title": "Aspire",
+          "about": "ресурсы, журналы и трассы AppHost через aspire agent mcp",
+          "requires": ["stack/dotnet"],
+          "detect": {"files": ["*.csproj", "apphost.cs"], "content": "Aspire\\.AppHost\\.Sdk"},
+          "server": {"command": "aspire", "args": ["agent", "mcp"]}
+        }
+      }
+    },
+    "alert-triage": {
+      "title": "Разбор алертов агентом в CI",
+      "secretsUse": "отбор и разбор алертов в CI; нужны с первого срабатывания алерта",
+      "question": "Разбирать ли агенту в CI горящие алерты Grafana?",
+      "requires": ["forge/github", "tracker/github-issues", "ci-agent"],
+      "forgeSecrets": {"github": ["AGENT_GITHUB_TOKEN"]},
+      "select": {"max": 0},
+      "off": {
+        "reason": "разбор алертов агентом в CI не подключен",
+        "replacement": "алерты разбирает дежурный по уведомлениям"
+      },
+      "settings": {
+        "grafana": {
+          "shape": "text", "kind": "decision", "required": true, "sources": ["literal"], "pattern": "https?://\\S+",
+          "title": "Адрес Grafana",
+          "rule": "адрес Grafana, через которую отбор читает алерты, а агент - Prometheus, Loki и Tempo прокси источников; с учетными данными только https; например https://grafana.example.com"
+        },
+        "auth": {
+          "shape": "text", "kind": "decision", "sources": ["secret"], "default": {"secret": "GRAFANA_TRIAGE_AUTH"},
+          "title": "Секрет входа раннера разбора в Grafana",
+          "rule": "имя секрета CI, а не значение; в секрете - пользователь:пароль, с которыми маршрут раннера разбора входит в Grafana по Basic; например GRAFANA_TRIAGE_AUTH; пустой секрет - анонимный доступ"
+        },
+        "alertmanager": {
+          "shape": "text", "kind": "decision", "default": "",
+          "title": "Источник Alertmanager в Grafana",
+          "rule": "имя источника Alertmanager в Grafana, группы алертов которого открывает ссылка из issue; например Alertmanager; пусто - ссылка на алерты самой Grafana"
+        },
+        "header": {
+          "shape": "text", "kind": "decision", "default": "", "pattern": "([A-Za-z0-9-]+)?",
+          "title": "Заголовок маршрута раннера разбора",
+          "rule": "имя заголовка, который запрос с учетными данными несет со значением 1, чтобы край узнал маршрут раннера разбора; например X-Triage-Route; пусто - без заголовка"
+        },
+        "pathsFile": {
+          "shape": "text", "kind": "fact", "required": true, "pattern": "\\S+\\.py",
+          "title": "Файл словаря путей Grafana",
+          "rule": "путь от корня к Python-файлу, где словарь GRAFANA_OPS_PATHS задан литералом с ключами prometheus, loki, tempo и alerts - префиксами прокси источников и чтения алертов; тот же словарь открывает эти пути маршруту раннера на краю"
+        },
+        "environment": {
+          "shape": "text", "kind": "decision", "default": "",
+          "title": "Окружение заданий разбора",
+          "rule": "имя окружения GitHub Actions для заданий отбора и разбора, откуда они берут секреты маршрута и правила защиты; например grafana-triage; пусто - задания идут без окружения"
+        },
+        "selectRunnerVar": {
+          "shape": "text", "kind": "decision", "default": "", "pattern": "([A-Z][A-Z0-9_]*)?",
+          "title": "Переменная раннеров отбора",
+          "rule": "имя переменной репозитория с метками runs-on отбора в JSON; например TRIAGE_SELECT_RUNS_ON со значением [\"self-hosted\"]; пока переменная пуста, конвейер не запускается; пусто - отбор идет на раннерах runners/github-actions.triage"
+        },
+        "severities": {
+          "shape": "texts", "kind": "decision", "default": ["critical", "warning"],
+          "title": "Разбираемые значения severity",
+          "rule": "значения метки severity, алерты с которыми идут в разбор, в порядке приоритета: при лимите прогона первым разбирается первое значение; например critical, warning; пусто - ни один алерт не разбирается"
+        },
+        "component": {
+          "shape": "text", "kind": "decision", "default": "component", "pattern": "[A-Za-z_][A-Za-z0-9_]*",
+          "title": "Метка компонента алерта",
+          "rule": "имя метки с компонентом алерта: ее значение - вторая часть ключа issue после alertname, у алерта без этой метки - знак -; например service"
+        },
+        "group": {
+          "shape": "text", "kind": "decision", "default": "", "pattern": "([A-Za-z_][A-Za-z0-9_]*)?",
+          "title": "Метка группы ошибки",
+          "rule": "имя метки, значение которой дает алерту третью часть ключа, свое issue и свой тред уведомления; например error_group; пусто - ключ без группы"
+        },
+        "label": {
+          "shape": "text", "kind": "decision", "default": "alert", "pattern": "[\\w.:-]+",
+          "title": "Метка issue алертов",
+          "rule": "метка, которой отбор помечает issue алертов и по которой их находит; например alert"
+        },
+        "cooldownHours": {
+          "shape": "text", "kind": "decision", "default": "24", "pattern": "[0-9]+",
+          "title": "Пауза после разбора в часах",
+          "rule": "число часов после завершенного разбора, в которые новое срабатывание ключа с открытым issue ждет в очереди; ручной запуск с номером issue не ждет; например 24; 0 - без паузы"
+        },
+        "limit": {
+          "shape": "text", "kind": "decision", "default": "3", "pattern": "[1-9][0-9]*",
+          "title": "Лимит разборов за прогон",
+          "rule": "наибольшее число разборов, которое запрашивает один прогон отбора; отбор идет раз в 10 минут, остальные срабатывания ждут в очереди; например 3"
+        },
+        "notify": {
+          "shape": "text", "kind": "decision", "default": "",
+          "title": "Скрипт рассылки ссылки на issue",
+          "rule": "путь от корня к скрипту рассылки с контрактом .harness/notify/notify.sh, которым шаг link отвечает на срабатывание ссылкой на issue; пусто - рассылка модуля notifications, а без модуля ссылка не уходит"
+        },
+        "notifyToken": {
+          "shape": "text", "kind": "decision", "sources": ["secret"], "default": {"secret": "SLACK_BOT_TOKEN"},
+          "title": "Секрет токена канала ссылки",
+          "rule": "имя секрета CI, а не значение; шаг link передает токен рассылке переменной с тем же именем, поэтому у рассылки модуля notifications оно совпадает с notifications/slack.token; например SLACK_BOT_TOKEN; пустой секрет - Slack ссылку пропускает"
+        },
+        "notifyChannel": {
+          "shape": "text", "kind": "decision", "default": "",
+          "title": "Канал ссылки на issue",
+          "rule": "имя канала Slack для ссылки на issue, его рассылка получает переменной NOTIFY_SLACK_CHANNEL; тред ищется только в публичном канале по имени; например alerts; пусто - канал из настроек рассылки"
+        },
+        "notifyThread": {
+          "shape": "text", "kind": "decision", "default": "",
+          "title": "Шаблон сообщения алерта для треда",
+          "rule": "регулярное выражение, по которому рассылка ищет в канале сообщение алерта и отвечает ссылкой в его тред; {} заменяется именем алерта с группой ошибки; например FIRING.*{}; пусто - ссылка отдельным сообщением"
+        }
+      }
+    },
+    "githooks": {
+      "title": "Git-хуки",
+      "question": "Какие git-хуки нужны в проекте?",
+      "select": {"min": 1},
+      "default": ["commit-msg", "pre-push"],
+      "off": {
+        "reason": "git-хуки harness не ставятся",
+        "replacement": "формат коммитов PR и гейты дерева проверяет Check: ./.harness/hooks/python.cmd .harness/scripts/check/check-all.py; привязку Task-Branch без хука commit-msg Check не проверяет"
+      },
+      "extensions": {
+        "commit-msg": {"title": "commit-msg", "about": "проверяет формат сообщения и выделенную копию агента в ветках конвенции, дописывает трейлеры Issue, PR, Agent, Task-Branch"},
+        "pre-push": {"title": "pre-push", "about": "проверяет git diff --check, отправляемые refs сессии агента и ее копию в конвейере; добавляет хуки reference-transaction и post-merge"}
+      }
+    },
+    "sdd": {
+      "title": "Разработка от спецификации",
+      "question": "Вести ли фичи через спецификации?",
+      "select": {"min": 1, "max": 1},
+      "default": "speckit",
+      "off": {
+        "reason": "фичи ведутся без спецификаций",
+        "replacement": "постановку несет задача трекера"
+      },
+      "extensions": {
+        "speckit": {"title": "Spec Kit", "about": "ставит .specify/, скиллы speckit-* и гейт реестра требований", "detect": {"paths": [".specify/"]}}
+      }
+    },
+    "prose": {
+      "title": "Правила письма человеческого текста",
+      "question": "Проверять ли человеческий текст правилами письма?",
+      "select": {"min": 1, "max": 1},
+      "default": "vale",
+      "off": {
+        "reason": "правила письма не подключены",
+        "replacement": "текст проверяет ревью"
+      },
+      "extensions": {
+        "vale": {
+          "title": "Vale",
+          "about": "ставит пакет стиля HumanizedText, стиль Publication для публикуемых текстов и гейт prose",
+          "detect": {"paths": [".vale.ini"]},
+          "settings": {
+            "glossaryLevel": {
+              "shape": "choice", "kind": "decision", "values": {"suggestion": "термин глоссария только подсказывает и ничего не блокирует", "warning": "термин блокирует комментарии кода и извлеченные значения JSON и messages.env", "error": "термин блокирует еще документацию, сообщения коммитов и тексты для поставщика кода"}, "default": "suggestion",
+              "title": "Уровень терминов глоссария"
+            },
+            "glossaryValueExceptions": {
+              "shape": "records", "fields": {"required": ["path", "key", "value", "reason"]}, "kind": "decision", "default": [],
+              "title": "Исключения глоссария для значений реестров",
+              "rule": "записи с полями: path - путь файла от корня проекта, key - полный ключ, value - полное исходное значение, reason - почему термин допустим; запись снимает только HumanizedText.Glossary с точно совпавшего значения; пусто - исключений нет"
+            },
+            "localeDictionaries": {
+              "shape": "texts", "kind": "decision", "default": ["ru.json"],
+              "title": "Словари интерфейса для Vale",
+              "rule": "имена файлов словарей интерфейса, значения которых Vale проверяет наравне с messages.env; например ru.json; пусто - проверяются только messages.env"
+            }
+          }
+        }
+      }
+    },
+    "skills": {
+      "title": "Вендорные скиллы стека и инструментов",
+      "question": "Какие пакеты вендорных скиллов нужны агентам проекта?",
+      "select": {"min": 1},
+      "off": {
+        "reason": "вендорные скиллы стека и инструментов не ставятся",
+        "replacement": "агент работает проектными скиллами и документацией; скилл вне пакетов проект подключает сам через docs.vendoredSkills"
+      },
+      "extensions": {
+        "aspire": {
+          "title": "Aspire",
+          "about": "скиллы AppHost, оркестрации, деплоя и мониторинга; источник microsoft/aspire-skills, лицензия MIT",
+          "requires": ["stack/dotnet"],
+          "detect": {"packages": ["Aspire.Hosting"], "files": ["*.csproj", "apphost.cs"], "content": "Aspire\\.AppHost\\.Sdk"},
+          "skills": ["aspire", "aspire-deployment", "aspire-init", "aspire-monitoring", "aspire-orchestration", "aspireify"]
+        },
+        "grafana": {
+          "title": "Grafana LGTM",
+          "about": "скиллы OpenTelemetry, Prometheus, PromQL, Loki, Tempo, Grafana OSS, дашбордов, алертов и SLO; источник grafana/skills, лицензия Apache-2.0",
+          "detect": {
+            "files": ["prometheus.yml", "prometheus.yaml", "alertmanager.yml", "alertmanager.yaml", "grafana.ini", "*grafana/provisioning/*", "*.alloy", "loki*.yaml", "loki*.yml", "tempo*.yaml", "tempo*.yml", "otel-collector*.yaml", "otel-collector*.yml"],
+            "packages": ["OpenTelemetry"],
+            "npm": ["@opentelemetry/api", "@opentelemetry/sdk-node"]
+          },
+          "skills": ["alerting-irm", "dashboarding", "grafana-oss", "loki", "opentelemetry", "prometheus", "promql", "tempo"]
+        },
+        "dotnet-docs": {
+          "title": "Документация и API .NET",
+          "about": "скиллы microsoft-docs из github/awesome-copilot и dotnet-inspect из вывода самого инструмента; лицензия MIT",
+          "requires": ["stack/dotnet"],
+          "detect": {"files": ["*.sln", "*.slnx", "*.csproj"]},
+          "skills": ["dotnet-inspect", "microsoft-docs"]
+        },
+        "drawio": {
+          "title": "draw.io",
+          "about": "скилл редактируемых диаграмм drawio-skill; источник Agents365-ai/drawio-skill, лицензия MIT, индекс фигур - Apache-2.0",
+          "detect": {"files": ["*.drawio", "*.drawio.svg", "*.drawio.png", "*.drawio.xml"]},
+          "skills": ["drawio-skill"]
+        }
+      }
+    },
+    "secrets": {
+      "title": "Поиск секретов",
+      "question": "Искать ли секреты в дереве и истории ветки?",
+      "select": {"min": 1, "max": 1},
+      "default": "gitleaks",
+      "off": {
+        "reason": "поиск секретов harness не подключен",
+        "replacement": "секреты в дереве ищут только ревью и защита push у поставщика кода, если она включена"
+      },
+      "extensions": {
+        "gitleaks": {"title": "gitleaks", "detect": {"paths": [".gitleaks.toml"]}}
+      }
+    },
+    "shell": {
+      "title": "Проверка shell-скриптов",
+      "question": "Проверять ли shell-скрипты?",
+      "select": {"min": 1, "max": 1},
+      "default": "shellcheck",
+      "off": {
+        "reason": "shell-скрипты не проверяются",
+        "replacement": "скрипты проекта проверяет только ревью, скрипты комплекта проверены shellcheck в его репозитории"
+      },
+      "extensions": {
+        "shellcheck": {"title": "shellcheck", "detect": {"files": ["*.sh"]}}
+      }
+    },
+    "release": {
+      "title": "Релиз",
+      "secretsUse": "задания среза релиза и обратного слияния; нужен с первого релиза",
+      "question": "Выпускать ли релизы конвейером harness?",
+      "requires": ["forge"],
+      "select": {"min": 1, "max": 1},
+      "off": {
+        "reason": "релиз идет вне конвейера harness",
+        "replacement": "версию и тег ставит процесс проекта"
+      },
+      "extensions": {
+        "tag-flow": {
+          "title": "Релиз по тегу",
+          "about": "ставит конвейер релиза: версия из тега, срез release/*, хотфикс и обратное слияние",
+          "settings": {
+            "token": {
+              "shape": "text", "kind": "decision", "sources": ["secret"], "default": {"secret": "RELEASE_TOKEN"}, "static": true,
+              "title": "Токен записи релиза",
+              "rule": "имя секрета CI, а не значение: токен, которым задания среза и обратного слияния создают ветку и PR, чтобы на PR сам стартовал Check; у GitHub - fine-grained PAT с записью Contents, Pull requests и Workflows, у GitLab - токен с правом api; например RELEASE_TOKEN"
+            }
+          }
+        }
+      }
+    },
+    "notifications": {
+      "title": "Уведомления",
+      "secretsUse": "рассылка уведомлений конвейера; нужен с первого уведомления",
+      "question": "Куда конвейер отправляет уведомления?",
+      "select": {"min": 1},
+      "off": {
+        "reason": "уведомления не подключены",
+        "replacement": "итог релиза остается в сводке прогона CI"
+      },
+      "settings": {
+        "events": {
+          "shape": "object", "kind": "decision", "default": {},
+          "title": "Каналы по видам уведомлений",
+          "rule": "объект: ключ - вид уведомления release или alert-triage, значение - список включенных каналов; например {\"release\": [\"slack\"]}; вид без записи идет во все включенные каналы; пусто - каждый вид во все каналы"
+        }
+      },
+      "extensions": {
+        "forge": {
+          "title": "Комментарий PR",
+          "about": "комментарий в PR у поставщика кода; уведомление без своего PR этот канал пропускает",
+          "requires": ["forge"],
+          "settings": {
+            "onFailure": {
+              "shape": "choice", "values": {"fatal": "шаг падает", "warn": "шаг печатает предупреждение и идет дальше"}, "kind": "decision", "default": "fatal",
+              "title": "Отказ доставки"
+            }
+          }
+        },
+        "slack": {
+          "title": "Slack",
+          "settings": {
+            "channel": {
+              "shape": "text", "kind": "decision", "sources": ["literal", "env"], "default": "releases",
+              "title": "Канал Slack",
+              "rule": "имя канала, куда бот пишет уведомления, литералом или ссылкой на переменную окружения; например releases; переменная NOTIFY_SLACK_CHANNEL отдельного уведомления его заменяет; пусто - уведомление не уйдет, Slack не примет сообщение без канала"
+            },
+            "token": {
+              "shape": "text", "kind": "decision", "sources": ["secret"], "default": {"secret": "SLACK_BOT_TOKEN"},
+              "title": "Токен бота Slack",
+              "rule": "имя секрета CI с токеном бота, а не значение; боту нужно право chat:write, для ответа в тред - channels:read и channels:history; например SLACK_BOT_TOKEN; пустой секрет - канал пропускается"
+            },
+            "onFailure": {
+              "shape": "choice", "values": {"fatal": "шаг падает", "warn": "шаг печатает предупреждение и идет дальше"}, "kind": "decision", "default": "warn",
+              "title": "Отказ доставки"
+            }
+          }
+        }
+      }
+    }
+  }
+}

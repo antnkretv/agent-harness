@@ -1,0 +1,24 @@
+--- a/dist/services/lsp-client.js
++++ b/dist/services/lsp-client.js
+@@ -25,3 +25,3 @@
+ import { logger } from '../utils/logger.js';
+-import { pathToUri } from '../utils/uri.js';
++import { pathToUri, uriToPath, normalizePath } from '../utils/uri.js';
+ import { getWorkspaceSettings } from '../config/workspace-settings.js';
+@@ -648,5 +648,6 @@
+             const p = params;
+-            this.pushedDiagnostics.set(p.uri, p.diagnostics);
+-            this.diagnosticsPublishedAt.set(p.uri, Date.now());
+-            this.storeDiagnostics(p.uri, this.mergedDiagnostics(p.uri));
++            const uri = pathToUri(normalizePath(uriToPath(p.uri)));
++            this.pushedDiagnostics.set(uri, p.diagnostics);
++            this.diagnosticsPublishedAt.set(uri, Date.now());
++            this.storeDiagnostics(uri, this.mergedDiagnostics(uri));
+         });
+--- a/dist/utils/uri.js
++++ b/dist/utils/uri.js
+@@ -40,3 +40,3 @@
+     // Normalize the path
+-    const normalized = path.resolve(filePath);
++    const normalized = path.resolve(filePath).replace(/^[a-z]:/i, (drive) => drive.toUpperCase());
+     // On Windows, handle drive letters

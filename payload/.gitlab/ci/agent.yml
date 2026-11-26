@@ -1,0 +1,52 @@
+.harness-agent:
+  stage: test
+  image: $HARNESS_CI_IMAGE
+  tags: {{harness.runner.agent}}
+  rules:
+    - if: $HARNESS_AGENT && $CI_COMMIT_REF_PROTECTED == "true"
+  variables:
+    GIT_DEPTH: "1"
+
+harness-agent-duplicate:
+  extends: [.harness-agent, .harness-pipeline-account]
+  timeout: 10m
+  script:
+    - >-
+      ./.harness/hooks/python.cmd .harness/scripts/agent/agent-event.py duplicate
+    - >-
+      ./.harness/hooks/python.cmd .harness/scripts/agent/agent-event.py account --output publisher_login
+  artifacts:
+    reports:
+      dotenv: harness.env
+
+harness-agent:
+  extends: [.harness-toolchain, .harness-agent, .harness-agent-account]
+  timeout: 60m
+  resource_group: harness-agent-$HARNESS_AGENT
+  needs:
+    - job: harness-agent-duplicate
+      artifacts: true
+  variables:
+    AGENT_PROVIDER: '{{harness.extension.ci-agent}}'
+  script:
+    - |
+      set -euo pipefail
+      if [ -n "${duplicate:-}" ]; then
+        exit 0
+      fi
+      AGENT_PROVIDER="$(./.harness/hooks/python.cmd .harness/scripts/check/check-pipeline.py --emit-provider issue-agent)"
+      export AGENT_PROVIDER
+      harness_ensure_agent_cli "$AGENT_PROVIDER"
+      output() { sed -n "s/^$1=//p" harness.env | tail -n 1; }
+      ./.harness/hooks/python.cmd .harness/scripts/agent/agent-event.py gate
+      if [ "$(output enabled)" != true ]; then
+        exit 0
+      fi
+      session="$CI_PROJECT_DIR/.harness-agent"
+      mkdir -p "$session"
+      ./.harness/hooks/python.cmd .harness/scripts/agent/agent-event.py workdir "$session/work"
+      status=0
+      ./.harness/hooks/python.cmd .harness/scripts/agent/agent-event.py session --workdir "$session/work" --log "$session/session.jsonl" --reviewer "$publisher_login" \
+        || status=$?
+      PASS=issue-agent ./.harness/hooks/python.cmd .harness/scripts/agent/session-log-digest.py "$session/session.jsonl" "$AGENT_PROVIDER"
+      exit "$status"

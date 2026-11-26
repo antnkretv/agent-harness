@@ -1,0 +1,6 @@
+extends: existence
+message: "Артефакт ИИ-копипаста: \"%s\" - удалить"
+scope: text
+level: error
+raw:
+  - '(:contentReference|oaicite:|turn\d+search\d+|utm_source=chatgpt|\[cite:|INSERT_[A-Z_]+|<think>|ppl-ai-file|[\x{200B}-\x{200D}\x{FEFF}])'
