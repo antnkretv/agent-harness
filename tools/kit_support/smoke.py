@@ -705,13 +705,15 @@ class Smoke:
         lock = self.read_json(LOCK)
         old = lock["kit"].get("commit", "")
         self.check(msg("smoke_commit_pinned"), old == run(["git", "rev-parse", "HEAD"], source).stdout.strip())
-        lock["kit"]["repository"] = source.as_uri()
+        missing = (self.work / "missing-kit").as_uri()
+        lock["kit"]["repository"] = missing
         self.write_json(LOCK, lock)
         self.write("docs/own.md", f"<{source.as_uri()}/blob/{old}/payload/docs/platform/agents/harness.md>\n")
         self.commit("chore: harness")
         head = run(["git", "symbolic-ref", "HEAD"], self.repo).stdout
-        hook = {"AGENT_HARNESS_CACHE": str(self.work / "commit-cache"),
-                "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.autocrlf", "GIT_CONFIG_VALUE_0": "true",
+        hook = {"AGENT_HARNESS_CACHE": str(self.work / "commit-cache"), "GIT_CONFIG_COUNT": "2",
+                "GIT_CONFIG_KEY_0": "core.autocrlf", "GIT_CONFIG_VALUE_0": "true",
+                "GIT_CONFIG_KEY_1": f"url.{source.as_uri()}.insteadOf", "GIT_CONFIG_VALUE_1": missing,
                 "GIT_DIR": str(self.repo / ".git"), "GIT_WORK_TREE": str(self.repo)}
         self.expect(msg("smoke_commit_built"), [sys.executable, str(self.repo / LOADER), "install"], env=hook)
         self.check(msg("smoke_commit_hook"), self.clean() and not (self.repo / ".git" / "shallow").exists()
@@ -721,6 +723,9 @@ class Smoke:
         edited.write_text(edited.read_text(encoding="utf-8") + "\nsmoke-kit-line\n", encoding="utf-8", newline="\n")
         run(["git", "commit", "-qam", "kit next"], source)
         new = run(["git", "rev-parse", "HEAD"], source).stdout.strip()
+        lock = self.read_json(LOCK)
+        lock["kit"]["repository"] = source.as_uri()
+        self.write_json(LOCK, lock)
         self.configure(msg("smoke_upgrade_answered"), kit=first)
         self.commit("chore: harness answers")
         self.expect(msg("smoke_commit_upgrade"), self.harness("upgrade", "--commit", "develop", "--no-pr"))
