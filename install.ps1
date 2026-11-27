@@ -30,9 +30,13 @@ try {
     $expected = ($published -split '\s+')[0].ToLowerInvariant()
     $actual = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()
     if ($expected -ne $actual) { throw "agent-harness: sha256 архива $actual не совпал с опубликованным $expected" }
-    tar -xzf $archive -C $work
+    $unpacked = Join-Path $work 'kit'
+    New-Item -ItemType Directory -Path $unpacked | Out-Null
+    tar -xzf $archive -C $unpacked
     if ($LASTEXITCODE -ne 0) { throw 'agent-harness: не удалось распаковать архив: нужен tar из Windows 10 или новее' }
-    $arguments = @($python | Select-Object -Skip 1) + @('-B', (Join-Path $work "$name\ah.py"), 'init', '--target', $root, '--archive', $archive)
+    $kit = Get-ChildItem -Directory -Path $unpacked | Select-Object -First 1
+    if (-not $kit -or -not (Test-Path (Join-Path $kit.FullName 'ah.py'))) { throw 'agent-harness: в архиве нет каталога комплекта с ah.py' }
+    $arguments = @($python | Select-Object -Skip 1) + @('-B', (Join-Path $kit.FullName 'ah.py'), 'init', '--target', $root, '--archive', $archive)
     & $python[0] @arguments
     if ($LASTEXITCODE -ne 0) { throw "agent-harness: ah init завершился с кодом $LASTEXITCODE" }
 }

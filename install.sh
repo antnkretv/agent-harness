@@ -37,9 +37,12 @@ curl -fsSL -o "$archive.sha256" "$releases/v$version/$name.tar.gz.sha256" || fai
 expected="$(cut -d ' ' -f 1 <"$archive.sha256")"
 actual="$("$python" -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$archive")"
 [ "$expected" = "$actual" ] || fail "sha256 архива $actual не совпал с опубликованным $expected"
-tar -xzf "$archive" -C "$work"
+mkdir "$work/kit"
+tar -xzf "$archive" -C "$work/kit"
+kit="$(find "$work/kit" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+[ -f "$kit/ah.py" ] || fail "в архиве нет каталога комплекта с ah.py"
 
-init=("$python" -B "$work/$name/ah.py" init --target "$root" --archive "$archive")
+init=("$python" -B "$kit/ah.py" init --target "$root" --archive "$archive")
 if [ -t 1 ] && { : </dev/tty; } 2>/dev/null; then
   "${init[@]}" </dev/tty
 else
