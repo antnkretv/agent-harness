@@ -1,6 +1,6 @@
 # Выпуск комплекта: пуш в master с версией kit.json, у которой еще нет тега, проходит проверку комплекта,
 # собирает архив и публикует выпуск v<версия> с файлом sha256; тег на этом коммите создает сам выпуск.
-# Повтор задания только дозагружает недостающие файлы. Загрузчик проекта и ah upgrade скачивают архив по
+# Скрипты install.sh и install.ps1 идут в выпуск с именем, версией и адресом комплекта из kit.json. Повтор задания только дозагружает недостающие файлы. Загрузчик проекта и ah upgrade скачивают архив по
 # адресу выпуска, а lock проекта закрепляет sha256.
 name: release
 
@@ -50,6 +50,11 @@ jobs:
         if: steps.version.outputs.skip != 'true'
         run: |
           python3 tools/kit.py build --out dist
+          name="$(python3 -c 'import json; print(json.load(open("kit.json"))["name"])')"
+          repository="$(python3 -c 'import json; print(json.load(open("kit.json"))["repository"])')"
+          for script in install.sh install.ps1; do
+            sed -e "s|__NAME__|$name|g" -e "s|__VERSION__|${TAG#v}|g" -e "s|__REPOSITORY__|$repository|g" "$script" > "dist/$script"
+          done
           cd dist && for archive in *.tar.gz; do sha256sum "$archive" > "$archive.sha256"; done
       - name: Publish release
         if: steps.version.outputs.skip != 'true'
@@ -71,7 +76,7 @@ jobs:
             fi
           fi
           if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+            gh release create "$TAG" dist/*.tar.gz dist/*.tar.gz.sha256 dist/install.sh dist/install.ps1 --target "$GITHUB_SHA" --title "$TAG" --generate-notes
             exit 0
           fi
           mkdir -p published
@@ -90,5 +95,8 @@ jobs:
             elif ! cmp -s "published/$name.sha256" "dist/$name.sha256"; then
               echo "::error::опубликованный $name.sha256 не сходится с архивом выпуска"; exit 1
             fi
+          done
+          for script in install.sh install.ps1; do
+            [ -f "published/$script" ] || gh release upload "$TAG" "dist/$script"
           done
           gh release edit "$TAG" --draft=false

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import os
 import shutil
@@ -11,11 +10,11 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from .configure import report, settle
+from .prompt import answered
 from .install import apply
 from .lock_install import archive_build, loader
 from .verify import status
-from .resources import LOCK, PROJECT, Refusal, git, hidden, kit_root, load_json, msg, read_lock, relocated, repository, say, sha256
+from .resources import ANSWERS, LOCK, PROJECT, Refusal, git, hidden, kit_root, load_json, msg, read_lock, relocated, repository, say, sha256
 
 TASK_WORKTREE = ".harness/scripts/pipeline/task-worktree.py"
 UPGRADE_CHANGE = ".harness/scripts/pipeline/kit-upgrade.py"
@@ -23,24 +22,32 @@ UPGRADE_KEY = "harness-update"
 
 
 def init(args: argparse.Namespace) -> int:
+    return configured(args, change=False)
+
+
+def change(args: argparse.Namespace) -> int:
+    return configured(args, change=True)
+
+
+def configured(args: argparse.Namespace, change: bool) -> int:
     root = repository(args.target)
-    if (root / LOCK).is_file():
-        raise Refusal(msg("init_installed", LOCK))
     with relocated(root, temporary=True):
-        settled = settle(args, root)
-    pending, problems, _ = settled
-    if pending is None and not problems:
-        kit = own_kit()
-        archive = Path(args.archive).resolve() if args.archive else released(kit, kit["version"])
-        try:
-            with contextlib.redirect_stdout(sys.stderr):
-                code = apply(argparse.Namespace(target=args.target, dry_run=False, archive=str(archive)))
-        finally:
-            if not args.archive:
-                archive.unlink(missing_ok=True)
-        if code:
-            return code
-    return report(args, settled)
+        problems = answered(root, change)
+    if problems:
+        for line in problems:
+            print("  - " + line)
+        raise Refusal(msg("params_invalid", PROJECT))
+    say("configure_done", PROJECT, ANSWERS)
+    given = getattr(args, "archive", None)
+    if change and not given:
+        return apply(argparse.Namespace(target=args.target, dry_run=False, archive=None))
+    kit = own_kit()
+    archive = Path(given).resolve() if given else released(kit, kit["version"])
+    try:
+        return apply(argparse.Namespace(target=args.target, dry_run=False, archive=str(archive)))
+    finally:
+        if not given:
+            archive.unlink(missing_ok=True)
 
 
 def upgrade(args: argparse.Namespace) -> int:
@@ -84,13 +91,9 @@ def upgraded(args: argparse.Namespace, root: Path, installed: dict, archive: Pat
         found = json.loads(started.stdout)
         work, branch = Path(found["path"]), found["branch"]
     if read_lock(work)["kit"].get("tree") != tree:
-        asked = json.loads(run(new + ["configure", "--target", str(work), "--next"], work).stdout)
-        if not asked.get("done") or asked.get("problems"):
-            print(asked.get("show", ""))
-            raise Refusal(msg("upgrade_questions", home / "ah.py", work))
         say("upgrade_overwrites")
         status(argparse.Namespace(target=str(work)))
-        run(new + ["apply", "--target", str(work), "--archive", str(archive)], work, show=True)
+        run(new + ["init", "--target", str(work), "--archive", str(archive)], work, show=True)
         if args.no_pr:
             say("upgrade_done", previous, version, home / "ah.py")
             return 0

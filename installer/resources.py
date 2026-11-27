@@ -486,7 +486,6 @@ SEED_FOLDERS = ("docs/platform/delivery/", "docs/platform/operations/")
 GUIDE_TEMPLATES = "templates"
 SHAPES = {"fullstack": SIDES, "backend": ("backend",), "frontend": ("frontend",)}
 OFF, NONE, ON = "off", "none", "on"
-OPTIONS_MAX = 4
 EVIDENCE_MAX = 4
 IDENTITY = ("project.name", "project.gitConfigPrefix", "git.baseBranch", "git.releaseBranch", "git.branchConvention")
 BRANCH_CONVENTIONS = ("conventional", "gitflow")
@@ -520,6 +519,6 @@ DOCS_ASKED = {
 
 def runtime_files(root: Path) -> tuple[str, ...]:
     package = root / "installer"
-    return ("ah.py", "messages.env", CATALOG, *(
+    return ("ah.py", "messages.env", CATALOG, "installer/requirements.txt", *(
         path.relative_to(root).as_posix() for path in sorted(package.rglob("*.py"))
         if "__pycache__" not in path.parts))

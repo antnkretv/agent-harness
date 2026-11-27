@@ -3,9 +3,8 @@
 Установщик живет только в архиве комплекта и в проект не ставится. Порядок действий и критерии
 готовности - AGENT.md комплекта, устройство установленного слоя - .harness/docs/harness.md.
 
-    ./payload/.harness/hooks/python.cmd ah.py init --target <repo> --next  # подключение проекта: configure, затем apply
-    ./payload/.harness/hooks/python.cmd ah.py configure --target <repo> --next  # следующий вопрос настройки JSON
-    ./payload/.harness/hooks/python.cmd ah.py configure --target <repo> --answer <id>=<значение> --next
+    ./payload/.harness/hooks/python.cmd ah.py init --target <repo>      # подключение проекта: вопросы настройки, затем apply
+    python3 .harness/ah.py change                                       # смена настроек: все вопросы с прежними ответами, затем apply
     ./payload/.harness/hooks/python.cmd ah.py pack --config <манифест или config.json> --out <каталог>  # архив под решения
     ./payload/.harness/hooks/python.cmd ah.py apply --target <repo> [--archive <архив этой сборки>]
     ./payload/.harness/hooks/python.cmd ah.py install --target <repo>   # файлы комплекта версии из lock.json; обычно через .harness/ah.py
@@ -23,9 +22,8 @@ import sys
 
 from .archive import pack
 from .catalog import load_catalog
-from .configure import configure
 from .install import apply
-from .lifecycle import init, upgrade
+from .lifecycle import change, init, upgrade
 from .lock_install import install
 from .resources import Refusal, kit_root
 from .review import providers, review
@@ -38,25 +36,14 @@ def workspace(args: argparse.Namespace) -> int:
     return subprocess.run(command, check=False).returncode
 
 
-def asking(command: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    command.add_argument("--next", action="store_true", help="напечатать следующий вопрос JSON")
-    command.add_argument("--answer", action="append", default=[], metavar="ID=VALUE",
-                         help="ответ владельца на вопрос; повторяется")
-    command.add_argument("--set", action="append", default=[], metavar="ID=VALUE",
-                         help="факт проекта, определенный агентом по rule; решение так не задается; повторяется")
-    command.add_argument("--reopen", action="append", default=[], metavar="MODULE|ID",
-                         help="спросить заново модуль или один ответ, например apps.<приложение>.check; повторяется")
-    return command
-
-
 def arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
-    configured_command = asking(commands.add_parser("configure", help="вопросы настройки и манифест проекта по ответам"))
-    configured_command.set_defaults(handler=configure)
-    initialized = asking(commands.add_parser("init", help="подключить проект: вопросы настройки, затем оболочка, манифест и lock"))
+    initialized = commands.add_parser("init", help="подключить проект: вопросы настройки, затем оболочка, манифест и lock")
     initialized.add_argument("--archive", help="архив этой версии; без него init скачивает архив выпуска")
     initialized.set_defaults(handler=init)
+    changed = commands.add_parser("change", help="сменить настройки: все вопросы с прежними ответами, затем apply")
+    changed.set_defaults(handler=change)
     upgraded = commands.add_parser("upgrade", help="новая версия комплекта: ветка задачи, apply новой версией, lock и PR")
     chosen = upgraded.add_mutually_exclusive_group()
     chosen.add_argument("--version", help="версия выпуска; без нее и без --commit - последний выпуск")
