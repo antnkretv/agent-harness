@@ -522,8 +522,8 @@ def write_answers(root: Path, state: dict) -> None:
     data["answers"] = dict(sorted(state["answers"].items()))
     if state.get("reopened"):
         data["reopened"] = dict(sorted(state["reopened"].items()))
-    if state.get("reopened"):
-        data["alone"] = state.get("alone", [])
+    if state.get("alone"):
+        data["alone"] = state["alone"]
     (root / ANSWERS).parent.mkdir(parents=True, exist_ok=True)
     (root / ANSWERS).write_text(json_text(data), encoding="utf-8", newline="\n")
 
@@ -618,7 +618,7 @@ def settle(root: Path, given: dict | None = None, change: bool = False, strict: 
     catalog = load_catalog()
     state = read_answers(root)
     answers, reopened = state.setdefault("answers", {}), state.setdefault("reopened", {})
-    alone = set(state.get("alone", reopened))
+    alone = set(state.get("alone", []))
     migrate(answers, reopened, catalog, alone)
     for entries in (answers, reopened):
         for key in list(entries):
