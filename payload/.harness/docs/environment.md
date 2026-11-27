@@ -76,13 +76,12 @@ Cursor (`start` в `.cursor/environment.json` зовет `.cursor/start.sh --ste
 свежем клоне они появляются на первом старте сессии, и если агент прочитал правила раньше хука, правила
 по путям видны со следующей сессии. Скрипт зовут:
 
-- `session-start.sh` первым шагом каждого старта сессии: Claude Code, Codex и `sessionStart` Cursor.
+- `session-start.sh` первым шагом каждого старта сессии: `SessionStart` Claude Code, `sessionStart` и `workspaceOpen` Cursor.
   Отказ останавливает старт с кодом 1 до подготовки удаленной сессии, и тулчейн с зависимостями тогда
   не ставятся. Каталог на месте ссылки, например копия скиллов в `.claude/skills/`, - такой отказ:
   перенесите свои скиллы в `.agents/skills/` и удалите каталог; копии скиллов установки `harness-*` не
   переносят, а удаляют: они живут только в архиве комплекта;
-- хук `workspaceOpen` Cursor при открытии проекта и `.cursor/start.sh` на старте машины Cursor Cloud,
-  где `sessionStart` не срабатывает; отказ в `start.sh` старт машины не останавливает;
+- `.cursor/start.sh` на старте машины Cursor Cloud, где `sessionStart` не срабатывает; отказ в `start.sh` старт машины не останавливает;
 - `agent_runtime` перед сессией агента в CI, кроме сессии ревью: она только читает дерево круга.
   Отказ завершает сессию с причиной.
 
@@ -92,15 +91,20 @@ Cursor (`start` в `.cursor/environment.json` зовет `.cursor/start.sh --ste
 
 | Агент | Снапшот | Старт сессии |
 | --- | --- | --- |
-| Claude Code (web), `agents/claude-code` | поле setup script окружения на claude.ai/code: [сниппет](#setup-script-облачного-окружения) | хук `SessionStart` в [`.claude/settings.json`](../../.claude/settings.json) зовет [`.claude/hooks/session-start.sh`](../../.claude/hooks/session-start.sh) |
-| Cursor Cloud, `agents/cursor` | `install` в [`.cursor/environment.json`](../../.cursor/environment.json) | `start` - [`.cursor/start.sh`](../../.cursor/start.sh); хук `sessionStart` в [`.cursor/hooks.json`](../../.cursor/hooks.json) зовет тот же адаптер, что Codex; [ссылки агентов](#ссылки-агентов) создают также хук `workspaceOpen` и `start.sh` |
-| Codex, `agents/codex` | поле setup script облачного окружения Codex: тот же [сниппет](#setup-script-облачного-окружения) | [`.codex/hooks/session-start.py`](../../.codex/hooks/session-start.py) |
+| Claude Code (web), `agents/claude-code` | поле setup script окружения на claude.ai/code: [сниппет](#setup-script-облачного-окружения) | хук `SessionStart` в [`.claude/settings.json`](../../.claude/settings.json) |
+| Cursor Cloud, `agents/cursor` | `install` в [`.cursor/environment.json`](../../.cursor/environment.json) | `start` - [`.cursor/start.sh`](../../.cursor/start.sh); хуки `sessionStart` и `workspaceOpen` в [`.cursor/hooks.json`](../../.cursor/hooks.json) |
+| Codex, `agents/codex` | поле setup script облачного окружения Codex: тот же [сниппет](#setup-script-облачного-окружения) | хука старта сессии нет: слой ставит хук промпта в [`.codex/hooks.json`](../../.codex/hooks.json) |
+
+Каждый хук агента зовет `.harness/hooks/python.cmd .harness/ah.py hook <хук>`: загрузчик ставит слой
+версии lock, если его нет или он устарел, и запускает установленный хук
+([установка по lock](harness.md#установка-по-lock)). Старт сессии - хук `session-start` с именем агента.
 
 Codex исполняет хуки проекта, в том числе [сессии конвейера](../README.md#сессия-конвейера),
 только из доверенного слоя `.codex/` и после одобрения их определения командой `/hooks`.
 
-Адаптер агента переводит его переменные в общие: `AGENT_PROJECT_DIR`, `AGENT_REMOTE` (удаленная
-сессия), `AGENT_ENV_FILE` (файл, в который сессия дописывает окружение). В локальной сессии
+Загрузчик передает хуку корень проекта в `AGENT_PROJECT_DIR`, а `session-start.sh` по имени агента
+переводит его переменные в общие: `AGENT_REMOTE` (удаленная сессия) и `AGENT_ENV_FILE` (файл, в который
+сессия дописывает окружение). В локальной сессии
 хук старта только запускает в фоне уборку влитых задач; остальные шаги идут лишь в удаленной.
 
 Установщик закрепленного Cursor CLI в комплекте поддерживает Linux/macOS. На native Windows Cursor CLI
@@ -132,8 +136,11 @@ exit 0
 В окружении облачного агента должен быть один репозиторий проекта: с несколькими репозиториями агент
 стартует в общем каталоге над клонами, не видит хуков старта и навыков проекта, и комплект не ставится.
 
-Не найденный checkout или неудачная установка не роняют окружение: комплект и тулчейн ставит хук
-старта сессии. Шаг `install` Cursor Cloud в `.cursor/environment.json` тоже сначала ставит комплект, но его отказ
+Не найденный checkout или неудачная установка не роняют окружение: у Claude Code комплект и тулчейн
+ставит хук старта сессии. У Cursor Cloud слой, зависимости и шаги `setup.session` повторяет `.cursor/start.sh`
+на каждом старте машины, а тулчейн после сбоя шага `install` не ставит никто. У Codex слой поставит первый
+хук, а тулчейн, зависимости и шаги `setup.session` после сбоя setup script не ставит никто. В обоих случаях
+окружение нужно пересобрать. Шаг `install` Cursor Cloud в `.cursor/environment.json` тоже сначала ставит комплект, но его отказ
 останавливает этот шаг: `cloud-setup.sh` без комплекта не запускается.
 
 ### Setup script и хук старта в Claude Code web

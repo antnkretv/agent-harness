@@ -1,4 +1,4 @@
-:; exec bash -c '. "$(dirname "$0")/../lib/python.sh"; harness_python --exec "$@"' "$0" "$@"
+:; d="$(dirname "$0")"; [ ! -r "$d/../lib/python.sh" ] || exec bash -c '. "$1/../lib/python.sh"; shift; harness_python --exec "$@"' bash "$d" "$@"; export PYTHONUTF8=1 PYTHONIOENCODING=utf-8; case "${OS:-}" in Windows_NT) command -v py >/dev/null 2>&1 && exec py -3 "$@"; exec python "$@";; esac; exec python3 "$@"
 @setlocal
 @set "PYTHONUTF8=1"
 @set "PYTHONIOENCODING=utf-8"

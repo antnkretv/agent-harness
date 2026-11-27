@@ -141,3 +141,33 @@ def compose(path: str, current: str, template: str, kit: str) -> str:
     if found.head or found.tail:
         return found.head + "\n  " + first + "\n  " + second + "\n" + found.tail
     return (found.title + "\n\n" if found.title else "") + first + "\n\n" + second + "\n"
+
+
+ENTRY_LINES = {"AGENTS.md": (".harness/AGENTS.md",), "CLAUDE.md": ("@.harness/AGENTS.md", "@.harness/CLAUDE.md")}
+
+
+def seed_parts(path: str, template: str) -> tuple[str, str, str]:
+    found = layout(path, template, "core")
+    begin = markers(path, PROJECT_BLOCK)[0]
+    preamble = found.outside[0].split(begin, 1)[0].strip() if found.outside else ""
+    return found.title, preamble, found.mine
+
+
+def seeded(path: str, template: str) -> str:
+    title, preamble, mine = seed_parts(path, template)
+    parts = [part for part in (title, preamble, mine) if part]
+    return "\n\n".join(parts) + "\n" if parts else ""
+
+
+def converted(path: str, current: str, template: str) -> str:
+    found = layout(path, current, "core")
+    title, preamble, _ = seed_parts(path, template)
+    given = {line for line in preamble.split("\n") if line.startswith("@")}
+    own = ["\n".join(line for line in part.split("\n") if line not in given).strip()
+           for part in [found.mine] + [part.strip() for part in found.outside if part.strip()]]
+    parts = [found.title or title, preamble, *[part for part in own if part]]
+    return "\n\n".join(part for part in parts if part) + "\n"
+
+
+def unwired(path: str, text: str) -> list[str]:
+    return [line for line in ENTRY_LINES.get(path, ()) if line not in text]

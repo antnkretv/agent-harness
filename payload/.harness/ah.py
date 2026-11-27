@@ -4,22 +4,24 @@
     python3 .harness/ah.py upgrade [--version <версия> | --commit <ветка или коммит>]  # ветка, lock и PR
     python3 .harness/ah.py change                         # смена настроек: вопросы с прежними ответами, затем apply
     python3 .harness/ah.py doctor                         # зависимости комплекта против машины
+    .harness/hooks/python.cmd .harness/ah.py hook [--fetch] <хук> [аргументы]  # хук агента: слой версии lock, затем .harness/hooks/<хук>
 
 Кеш хранит версию под ее kit.tree. Версии нет в кеше - загрузчик собирает комплект из kit.commit репозитория
 kit.repository, а без kit.commit скачивает архив выпуска; файлы любого источника сверяются с kit.tree.
 """
 
-import hashlib
+from __future__ import annotations
+
 import json
 import os
-import shutil
+import runpy
 import subprocess
 import sys
-import tarfile
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+HOOKS = ROOT / ".harness" / "hooks"
+RECORD = "harness/installed.json"
 CACHE = Path(os.environ.get("AGENT_HARNESS_CACHE") or Path.home() / ".cache" / "agent-harness")
 MSG_unpinned='ah: в .harness/state/lock.json нет kit.tree: комплект ставится командой apply --archive'
 MSG_shape='ah: архив %s - не комплект agent-harness: в нем нет одного каталога с ah.py'
@@ -29,6 +31,11 @@ MSG_unbuilt='ah: kit.py build в исходнике %s не собрал арх�
 MSG_uncached='ah: версии %s нет в кеше %s или ее файлы там изменены: передайте архив флагом --archive'
 MSG_download='ah: архив выпуска %s не скачан: %s. Передайте архив флагом --archive'
 MSG_fetch='ah: коммит %s комплекта не получен из %s: %s. Передайте архив флагом --archive'
+MSG_offline='версии %s нет в кеше %s, а этот хук сеть не использует'
+MSG_hook_usage='ah: после hook нужно имя хука из .harness/hooks'
+MSG_hook_unknown='в .harness/hooks нет хука %s'
+MSG_hook_refused='выполните python3 .harness/ah.py install: %s'
+MSG_hook_runner='ah: хук %s не запущен: %s'
 
 
 def msg(key: str, *args: object) -> str:
@@ -36,6 +43,8 @@ def msg(key: str, *args: object) -> str:
 
 
 def tree_digest(files) -> str:
+    import hashlib
+
     return hashlib.sha256("".join(f"{name}\0{hashlib.sha256(data).hexdigest()}\n"
                                   for name, data in sorted(files)).encode("utf-8")).hexdigest()
 
@@ -47,6 +56,10 @@ def genuine(top: Path, tree: str) -> bool:
 
 
 def unpacked(archive: Path, home: Path, tree: str) -> Path:
+    import shutil
+    import tarfile
+    import tempfile
+
     CACHE.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=".unpack-", dir=CACHE))
     try:
@@ -82,6 +95,9 @@ def isolated() -> dict:
 
 
 def built(source: Path, commit: bool = False) -> Path:
+    import shutil
+    import tempfile
+
     CACHE.mkdir(parents=True, exist_ok=True)
     out = Path(tempfile.mkdtemp(prefix=".build-", dir=CACHE))
     if subprocess.run([sys.executable, str(source / "tools" / "kit.py"), "build", "--out", str(out), *(["--commit"] if commit else [])],
@@ -93,6 +109,9 @@ def built(source: Path, commit: bool = False) -> Path:
 
 
 def fetched(repository: str, ref: str) -> Path:
+    import shutil
+    import tempfile
+
     CACHE.mkdir(parents=True, exist_ok=True)
     work, env = Path(tempfile.mkdtemp(prefix=".fetch-", dir=CACHE)), isolated()
     for command in (["init", "-q"], ["fetch", "-q", "--depth", "1", repository, ref], ["checkout", "-q", "--detach", "FETCH_HEAD"]):
@@ -108,6 +127,8 @@ def fetched(repository: str, ref: str) -> Path:
 
 
 def from_source(source: Path, tree: str) -> Path:
+    import shutil
+
     archive = built(source, True)
     try:
         return unpacked(archive, CACHE / tree, tree)
@@ -120,6 +141,9 @@ def release(kit: dict) -> str:
 
 
 def downloaded(kit: dict) -> Path:
+    import shutil
+    import tempfile
+
     import urllib.request
 
     url = release(kit)
@@ -134,7 +158,11 @@ def downloaded(kit: dict) -> Path:
     return Path(path)
 
 
-def place(kit: dict, archive: "Path | None", home: Path, tree: str) -> None:
+def place(kit: dict, archive: "Path | None", home: Path, tree: str, network: bool = True) -> None:
+    import shutil
+
+    if archive is None and not network:
+        sys.exit(msg("offline", tree[:12], CACHE))
     if archive is not None:
         unpacked(archive, home, tree)
     elif kit.get("commit") and kit.get("repository"):
@@ -159,24 +187,19 @@ def place(kit: dict, archive: "Path | None", home: Path, tree: str) -> None:
         sys.exit(msg("uncached", tree[:12], CACHE))
 
 
-def main(args: list[str]) -> int:
-    if not args or args[0] in ("-h", "--help"):
-        print(__doc__)
-        return 0
+def pinned() -> dict:
     kit = json.loads((ROOT / ".harness/state/lock.json").read_text(encoding="utf-8"))["kit"]
-    tree = kit.get("tree")
-    if not tree:
+    if not kit.get("tree"):
         sys.exit(msg("unpinned"))
-    archive = None
-    if "--archive" in args:
-        at = args.index("--archive")
-        if at + 1 == len(args):
-            sys.exit(msg("no_archive"))
-        archive = Path(args[at + 1])
-        del args[at:at + 2]
+    return kit
+
+
+def prepared(archive: "Path | None", network: bool = True) -> Path:
+    kit = pinned()
+    tree = kit["tree"]
     home = CACHE / tree
     if not genuine(home, tree):
-        place(kit, archive, home, tree)
+        place(kit, archive, home, tree, network)
     link = ROOT / ".harness" / "kit"
     if os.path.realpath(link) != os.path.realpath(home) and os.name == "nt":
         if link.is_symlink() or link.is_file():
@@ -191,8 +214,92 @@ def main(args: list[str]) -> int:
         fresh.unlink(missing_ok=True)
         fresh.symlink_to(home, target_is_directory=True)
         os.replace(fresh, link)
+    return link
+
+
+def utility(link: Path, args: list[str], **streams) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, "-B", str(link / "ah.py"), *args, "--target", str(ROOT)],
-                          env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}).returncode
+                          env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}, **streams)
+
+
+def placed_tree() -> str:
+    done = subprocess.run(["git", "rev-parse", "--git-path", RECORD], cwd=ROOT, capture_output=True, text=True)
+    record = Path(done.stdout.strip())
+    try:
+        return json.loads((record if record.is_absolute() else ROOT / record).read_text(encoding="utf-8")).get("kit", "")
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def hook_script(name: str) -> "Path | None":
+    return next((HOOKS / (name + suffix) for suffix in (".py", ".sh", ".ps1") if (HOOKS / (name + suffix)).is_file()), None)
+
+
+def installed(network: bool) -> str:
+    try:
+        done = utility(prepared(None, network), ["install"], stdout=sys.stderr, stderr=subprocess.PIPE, text=True)
+    except SystemExit as stop:
+        return str(stop.code)
+    except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
+        return str(error) or type(error).__name__
+    sys.stderr.write(done.stderr)
+    said = [line for line in done.stderr.splitlines() if line.strip()]
+    return "" if done.returncode == 0 else said[-1] if said else str(done.returncode)
+
+
+def refused(reason: str, rest: list[str]) -> int:
+    print(msg("hook_refused", reason), file=sys.stderr)
+    return 0 if "stop" in rest else 2
+
+
+def hook(args: list[str]) -> int:
+    network = args[:1] == ["--fetch"]
+    args = args[network:]
+    if not args or not args[0].replace("-", "").isalnum():
+        sys.exit(msg("hook_usage"))
+    name, rest = args[0], args[1:]
+    script = hook_script(name)
+    try:
+        tree = json.loads((ROOT / ".harness/state/lock.json").read_text(encoding="utf-8"))["kit"].get("tree")
+    except (OSError, ValueError, KeyError):
+        tree = None
+    if script is None or tree and placed_tree() != tree:
+        reason = installed(network)
+        script = hook_script(name)
+        if reason or script is None:
+            return refused(reason or msg("hook_unknown", name), rest)
+    os.environ["AGENT_PROJECT_DIR"] = ROOT.as_posix()
+    if script.suffix == ".py":
+        sys.argv, sys.path[0] = [str(script), *rest], str(script.parent)
+        runpy.run_path(str(script), run_name="__main__")
+        return 0
+    if script.suffix == ".sh":
+        sys.path.insert(0, str(ROOT / ".harness" / "lib"))
+        from executables import bash
+        command = [bash(), str(script), *rest]
+    else:
+        command = ["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), *rest]
+    try:
+        return subprocess.call(command, cwd=ROOT)
+    except OSError as error:
+        print(msg("hook_runner", name, error), file=sys.stderr)
+        return 1
+
+
+def main(args: list[str]) -> int:
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__)
+        return 0
+    if args[0] == "hook":
+        return hook(args[1:])
+    archive = None
+    if "--archive" in args:
+        at = args.index("--archive")
+        if at + 1 == len(args):
+            sys.exit(msg("no_archive"))
+        archive = Path(args[at + 1])
+        del args[at:at + 2]
+    return utility(prepared(archive), args).returncode
 
 
 if __name__ == "__main__":

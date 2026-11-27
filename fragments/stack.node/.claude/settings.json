@@ -5,8 +5,7 @@
 				"matcher": "Edit|Write",
 				"hooks": [
 					{
-						"command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/eslint-file.sh\"",
-						"shell": "bash",
+						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/ah.py\" hook eslint-file",
 						"statusMessage": "ESLint по изменённому файлу…",
 						"timeout": 120,
 						"type": "command"
