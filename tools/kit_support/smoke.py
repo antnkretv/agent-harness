@@ -91,11 +91,12 @@ prompt.questionary()
 from prompt_toolkit.application import create_app_session
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import DummyOutput
-keys, asked, shown = json.loads(sys.argv[3]), [], prompt.asked
+keys, asked, items, shown = json.loads(sys.argv[3]), [], [], prompt.asked
 
 
 def scripted(library, question):
     asked.append(question.id)
+    items.extend(item["id"] for item in question.items or [])
     with create_pipe_input() as pipe:
         pipe.send_text(keys.get(question.id, "\\r"))
         with create_app_session(input=pipe, output=DummyOutput()):
@@ -103,8 +104,8 @@ def scripted(library, question):
 
 
 prompt.terminal, prompt.asked = (lambda: True), scripted
-problems = prompt.answered(Path(sys.argv[2]))
-print(json.dumps({"asked": asked, "problems": problems}))
+problems = prompt.answered(Path(sys.argv[2]), sys.argv[4] == "change")
+print(json.dumps({"asked": asked, "items": items, "problems": problems}))
 """
 
 
@@ -894,7 +895,8 @@ class Smoke:
                    and self.linked() and (self.repo / PROJECT).is_file()
                    and self.read_json(ANSWERS)["answers"].get("project.name", {}).get("by") == "detected"
                    and all(self.read_json(ANSWERS)["answers"].get(key, {}).get("by") == "default"
-                           for key in ("agents.cli", "agents.tools")))
+                           for key in ("agents.cli", "agents.tools"))
+                   and self.read_json(ANSWERS)["answers"].get("modules.forge", {}).get("by") == "detected")
         self.commit("chore: harness")
         if self.expect(msg("smoke_init_again"), command):
             self.check(msg("smoke_init_idempotent"), self.clean())
@@ -904,10 +906,7 @@ class Smoke:
         self.bootstrap()
         last = "\x1b[A \r"
         keys = {"modules.agents": " \r", "modules.backend": last, "modules.frontend": last, "defaults": " \r"}
-        done = run([sys.executable, "-B", "-c", PROMPTER, str(self.kit), str(self.repo), json.dumps(keys)], self.repo)
-        found = json.loads(done.stdout.strip().splitlines()[-1]) if done.returncode == 0 and done.stdout.strip() else {}
-        if not found:
-            print(done.stdout + done.stderr, flush=True)
+        found = self.prompter(keys, "init")
         stored = self.read_json(ANSWERS)["answers"] if (self.repo / ANSWERS).is_file() else {}
         asked = found.get("asked", [])
         dropped = asked[asked.index("defaults") + 1] if "defaults" in asked[:-1] else ""
@@ -915,18 +914,31 @@ class Smoke:
                    and stored.get("modules.agents") == {"value": ["claude-code"], "by": "owner"}
                    and stored.get("shape", {}).get("by") == "owner")
         self.check(msg("smoke_prompt_summary"), bool(dropped) and dropped in stored and stored[dropped]["by"] == "owner")
+        manifest = self.read(PROJECT) if (self.repo / PROJECT).is_file() else ""
+        changed = self.prompter({}, "change")
+        separate = set(changed.get("items", [])) & set(changed.get("asked", []))
+        self.check(msg("smoke_prompt_change"), bool(changed) and {"stack", "defaults"} <= set(changed["asked"])
+                   and not separate and self.read(PROJECT) == manifest)
+
+    def prompter(self, keys: dict, command: str) -> dict:
+        done = run([sys.executable, "-B", "-c", PROMPTER, str(self.kit), str(self.repo), json.dumps(keys), command], self.repo)
+        found = json.loads(done.stdout.strip().splitlines()[-1]) if done.returncode == 0 and done.stdout.strip() else {}
+        if not found:
+            print(done.stdout + done.stderr, flush=True)
+        return found
 
     def scripted(self) -> None:
         """install.sh выпуска: скачивает архив версии, сверяет sha256 и ставит проект через ah init."""
         self.bootstrap()
         shipped = json.loads((self.kit / "kit.json").read_text(encoding="utf-8"))
-        version = shipped["version"]
-        published = self.work / "script-releases" / f"v{version}" / f"{shipped['name']}-{version}.tar.gz"
+        releases = (self.work / "script-releases").as_uri()
+        published = Path(loader().release({**shipped, "repository": releases}).removeprefix("file://"))
         published.parent.mkdir(parents=True, exist_ok=True)
         data = self.archive_of(self.kit).read_bytes()
         published.write_bytes(data)
         checksum = published.with_name(published.name + ".sha256")
-        env = {"AGENT_HARNESS_VERSION": version, "AGENT_HARNESS_RELEASES": (self.work / "script-releases").as_uri()}
+        env = {"AGENT_HARNESS_NAME": shipped["name"], "AGENT_HARNESS_VERSION": shipped["version"],
+               "AGENT_HARNESS_REPOSITORY": releases}
         checksum.write_text(f"{'0' * 64}  {published.name}\n")
         self.expect(msg("smoke_script_sha"), ["bash", str(KIT / "install.sh")], 2, reason="sha256", env=env)
         checksum.write_text(f"{sha256(data)}  {published.name}\n")

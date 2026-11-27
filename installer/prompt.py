@@ -8,22 +8,24 @@ import sys
 from pathlib import Path
 
 from .configure import settle
+from .lock_install import loader
 from .questions import KEEP, Question, value_text
 from .resources import ANSWERS, HERE, Refusal, msg, say, sha256
 
 REQUIREMENTS = HERE / "installer" / "requirements.txt"
+OTHER = object()
 
 
 def terminal() -> bool:
     return sys.stdin.isatty() and sys.stdout.isatty()
 
 
-def cache() -> Path:
-    return Path(os.environ.get("AGENT_HARNESS_CACHE") or Path.home() / ".cache" / "agent-harness")
+def git_bash() -> bool:
+    return os.name == "nt" and bool(os.environ.get("MSYSTEM"))
 
 
 def questionary():
-    folder = cache() / "deps" / sha256(REQUIREMENTS.read_bytes())[:16]
+    folder = loader().CACHE / "deps" / sha256(REQUIREMENTS.read_bytes())[:16]
     if not folder.is_dir():
         fresh = folder.with_name(f"{folder.name}.{os.getpid()}.tmp")
         shutil.rmtree(fresh, ignore_errors=True)
@@ -71,8 +73,13 @@ def asked(library, question: Question):
     if question.kind == "single":
         values = [entry["value"] for entry in question.options]
         choices = [library.Choice(titled(entry["label"], entry["description"]), value=entry["value"]) for entry in question.options]
+        if not question.decision:
+            choices.append(library.Choice(msg("prompt_other"), value=OTHER))
         default = question.default if question.default in values else None
-        return library.select(question.text, choices=choices, default=default).unsafe_ask()
+        picked = library.select(question.text, choices=choices, default=default).unsafe_ask()
+        if picked is not OTHER:
+            return picked
+        return library.text(question.text, validate=validator(question) or (lambda _: True)).unsafe_ask()
     if question.kind == "multi":
         chosen = set(question.default) if isinstance(question.default, list) else {question.default}
         choices = [library.Choice(titled(entry["label"], entry["description"]), value=entry["value"],
@@ -82,21 +89,27 @@ def asked(library, question: Question):
                         validate=validator(question) or (lambda _: True)).unsafe_ask()
 
 
-def automatic(question: Question):
-    if question.default is None:
-        raise Refusal(msg("prompt_unanswered", question.id, question.text, question.rule or question.why or "-", ANSWERS))
-    return question.default
+def unattended(root: Path, change: bool) -> list[str]:
+    if git_bash():
+        print(msg("prompt_git_bash"), file=sys.stderr)
+    pending, problems, found = settle(root, {}, change, strict=True, defaults=True)
+    for item in found:
+        print(msg("prompt_found", item["id"], value_text(item["value"]), item.get("why") or "-"))
+    if pending is not None:
+        raise Refusal(msg("prompt_unanswered", pending.id, pending.text, pending.rule or pending.why or "-", ANSWERS))
+    return problems
 
 
 def answered(root: Path, change: bool = False) -> list[str]:
-    interactive = terminal()
-    library = questionary() if interactive else None
-    given, first, last = {}, True, None
+    if not terminal():
+        return unattended(root, change)
+    library = questionary()
+    given, first = {}, True
     while True:
         try:
-            pending, problems, found = settle(root, given, change and first, strict=not interactive)
+            pending, problems, found = settle(root, given, change and first)
         except Refusal as error:
-            if not interactive or not given:
+            if not given:
                 raise
             print(error, file=sys.stderr)
             given = {}
@@ -106,12 +119,6 @@ def answered(root: Path, change: bool = False) -> list[str]:
             print(msg("prompt_found", item["id"], value_text(item["value"]), item.get("why") or "-"))
         if pending is None:
             return problems
-        if not interactive:
-            if last == (pending.id, pending.default):
-                raise Refusal(msg("prompt_stuck", pending.id, value_text(pending.default)))
-            last = (pending.id, pending.default)
-            given = {pending.id: automatic(pending)}
-            continue
         try:
             given = {pending.id: asked(library, pending)}
         except KeyboardInterrupt:

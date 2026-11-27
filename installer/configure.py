@@ -522,8 +522,8 @@ def write_answers(root: Path, state: dict) -> None:
     data["answers"] = dict(sorted(state["answers"].items()))
     if state.get("reopened"):
         data["reopened"] = dict(sorted(state["reopened"].items()))
-    if state.get("alone"):
-        data["alone"] = state["alone"]
+    if state.get("reopened"):
+        data["alone"] = state.get("alone", [])
     (root / ANSWERS).parent.mkdir(parents=True, exist_ok=True)
     (root / ANSWERS).write_text(json_text(data), encoding="utf-8", newline="\n")
 
@@ -547,10 +547,10 @@ def removed(item: Question, value):
 
 
 def owner_question(catalog: dict, tree: Tree, answers: dict, incoming: set, reopened: dict,
-                   summaries: dict, alone: set, strict: bool) -> Question | None:
+                   summaries: dict, alone: set, strict: bool, defaults: bool) -> Question | None:
     while True:
-        session = Session(catalog, tree, answers, incoming, reopened=reopened, decisions=True, batching=True, alone=alone,
-                          strict=strict)
+        session = Session(catalog, tree, answers, incoming, defaults=defaults, reopened=reopened, decisions=True,
+                          batching=True, alone=alone, strict=strict)
         try:
             configured(session)
         except Pending:
@@ -610,8 +610,8 @@ def reopen_all(answers: dict, reopened: dict) -> None:
             reopened[key] = entry.get("value", entry.get("raw"))
 
 
-def settle(root: Path, given: dict | None = None, change: bool = False,
-           strict: bool = False) -> tuple[Question | None, list[str], list[dict]]:
+def settle(root: Path, given: dict | None = None, change: bool = False, strict: bool = False,
+           defaults: bool = False) -> tuple[Question | None, list[str], list[dict]]:
     given = dict(given or {})
     catalog = load_catalog()
     state = read_answers(root)
@@ -645,8 +645,10 @@ def settle(root: Path, given: dict | None = None, change: bool = False,
         reopened.pop(key, None)
         alone.discard(key)
     tree = Tree(root)
-    pending = owner_question(catalog, tree, answers, set(given), reopened, summaries, alone, strict)
-    session = Session(catalog, tree, answers, set(given), reopened=reopened, strict=strict)
+    pending = owner_question(catalog, tree, answers, set(given), reopened, summaries, alone, strict, defaults)
+    if summaries:
+        raise Refusal(msg("configure_summary_unused", ", ".join(sorted(summaries))))
+    session = Session(catalog, tree, answers, set(given), defaults=defaults, reopened=reopened, strict=strict)
     project = None
     if pending is None:
         try:
