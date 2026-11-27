@@ -859,8 +859,9 @@ class Smoke:
     def scripted(self) -> None:
         """install.sh выпуска: скачивает архив версии, сверяет sha256 и ставит проект через ah init."""
         self.bootstrap()
-        version = json.loads((self.kit / "kit.json").read_text(encoding="utf-8"))["version"]
-        published = self.work / "script-releases" / f"v{version}" / self.archive_of(self.kit).name
+        shipped = json.loads((self.kit / "kit.json").read_text(encoding="utf-8"))
+        version = shipped["version"]
+        published = self.work / "script-releases" / f"v{version}" / f"{shipped['name']}-{version}.tar.gz"
         published.parent.mkdir(parents=True, exist_ok=True)
         data = self.archive_of(self.kit).read_bytes()
         published.write_bytes(data)
