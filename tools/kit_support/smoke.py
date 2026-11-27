@@ -954,6 +954,14 @@ class Smoke:
         self.check(msg("smoke_prompt_rules"), all(again) and self.read_json(PROJECT).get("rules", {}).get("disabled") == [rule]
                    and {"stack", "defaults"} <= set(again[1].get("asked", []))
                    and not self.read_json(ANSWERS).get("reopened"))
+        script = "tools/env.sh"
+        self.write(script, "#!/usr/bin/env bash\n")
+        self.seed({"modules.agents.settings.envScript": script})
+        self.prompter({}, "init")
+        fact = self.prompter({}, "change")
+        stored = self.read_json(ANSWERS)["answers"].get("modules.agents.settings.envScript", {})
+        self.check(msg("smoke_prompt_fact"), "modules.agents.settings.envScript" in fact.get("asked", [])
+                   and stored.get("value") == script)
 
     def prompter(self, keys: dict, command: str) -> dict:
         done = run([sys.executable, "-B", "-c", PROMPTER, str(self.kit), str(self.repo), json.dumps(keys), command], self.repo)

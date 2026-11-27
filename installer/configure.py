@@ -286,7 +286,7 @@ def setting_value(s: Session, key: str, where: str, name: str, meta: dict, entri
         if "in" in meta:
             return s.ask(listed_question(entries, key, where, meta, parse))
         return s.ask(decision_question(key, where, meta, parse))
-    value = s.value(key, parse, MISSING)
+    value = s.value(key, parse, MISSING, asked=True)
     if value is MISSING:
         value = s.ask(fact_question(s, key, where, meta, parse))
     return MISSING if value == "" else value
