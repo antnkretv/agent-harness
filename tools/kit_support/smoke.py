@@ -939,6 +939,13 @@ class Smoke:
         separate = set(changed.get("items", [])) & set(changed.get("asked", []))
         self.check(msg("smoke_prompt_change"), bool(changed) and {"stack", "defaults"} <= set(changed["asked"])
                    and not separate and self.read(PROJECT) == manifest and self.owner_kept())
+        state = self.read_json(ANSWERS)
+        state["reopened"], state["alone"] = {"modules.githooks": ["off"]}, ["modules.githooks"]
+        state["answers"].pop("modules.githooks")
+        self.write_json(ANSWERS, state)
+        resumed = self.prompter({}, "change")
+        self.check(msg("smoke_prompt_resume"), resumed.get("asked", [None])[0] == "modules.githooks"
+                   and "stack" not in resumed.get("asked", []))
 
     def prompter(self, keys: dict, command: str) -> dict:
         done = run([sys.executable, "-B", "-c", PROMPTER, str(self.kit), str(self.repo), json.dumps(keys), command], self.repo)

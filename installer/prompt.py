@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .configure import settle
+from .configure import read_answers, settle
 from .lock_install import loader
 from .questions import KEEP, Question, value_text
 from .resources import ANSWERS, HERE, Refusal, msg, say, sha256
@@ -104,7 +104,7 @@ def answered(root: Path, change: bool = False) -> list[str]:
     if not terminal():
         return unattended(root)
     library = questionary()
-    given, first = {}, True
+    given, first = {}, not read_answers(root).get("reopened")
     while True:
         try:
             pending, problems, found = settle(root, given, change and first)
