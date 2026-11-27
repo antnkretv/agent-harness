@@ -152,8 +152,9 @@ exit 0
 при правке setup script, при правке списка разрешенных хостов и примерно раз в семь дней.
 
 Список разрешенных хостов окружения включает источники установщиков: `github.com` (Vale,
-shellcheck, gitleaks, PowerShell, плагин `docker mcp`), `nodejs.org` (Node.js), `dot.net` и хосты загрузки
-`dotnet-install.sh` (.NET SDK). Без хоста установщик отказывает, и снапшот собирается без
+shellcheck, gitleaks, PowerShell, плагин `docker mcp`), `nodejs.org` (Node.js), для .NET SDK - `dot.net`
+(сам `dotnet-install.sh`), `builds.dotnet.microsoft.com` и `ci.dot.net` (ленты SDK) и `aka.ms`
+(ссылка канала, когда версия не задана). Без хоста установщик отказывает, и снапшот собирается без
 инструмента.
 
 ## Установщики
