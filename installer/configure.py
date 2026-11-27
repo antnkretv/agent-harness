@@ -639,11 +639,11 @@ def settle(root: Path, given: dict | None = None, change: bool = False, strict: 
         reopen_all(answers, reopened)
         alone.clear()
     if defaults:
-        for key in list(reopened):
-            value = reopened.pop(key)
-            if key not in alone:
-                answers.setdefault(key, {"value": value, "by": "owner"})
-        alone.clear()
+        if alone & set(reopened):
+            raise Refusal(msg("configure_reopened", ", ".join(sorted(alone & set(reopened)))))
+        for key, value in reopened.items():
+            answers.setdefault(key, {"value": value, "by": "owner"})
+        reopened.clear()
     summaries = {key: given.pop(key) for key in SUMMARIES if key in given}
     for key, value in given.items():
         known_id(key, catalog)

@@ -904,6 +904,14 @@ class Smoke:
         change = self.installer() + ["change", "--target", str(self.repo)]
         kept = self.expect(msg("smoke_change_unattended"), change) and self.expect(msg("smoke_change_unattended"), change)
         self.check(msg("smoke_change_owner"), kept and self.owner_kept())
+        state = self.read_json(ANSWERS)
+        state["reopened"], state["alone"] = {"modules.githooks": ["off"]}, ["modules.githooks"]
+        state["answers"].pop("modules.githooks")
+        self.write_json(ANSWERS, state)
+        before = self.read(ANSWERS), self.read(PROJECT)
+        self.expect(msg("smoke_change_reopened"), change, 2, reason="modules.githooks")
+        self.check(msg("smoke_change_reopened_kept"), (self.read(ANSWERS), self.read(PROJECT)) == before
+                   and list(self.read_json(PROJECT)["modules"]["githooks"]["extensions"]) == ["commit-msg"])
 
     def owner_kept(self) -> bool:
         """Решение владельца не по значению каталога остается его ответом и попадает в манифест."""
