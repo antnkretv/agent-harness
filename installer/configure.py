@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import json
 import posixpath
 import re
@@ -40,10 +39,8 @@ from .questions import (
     choice_question,
     decision_question,
     docs_list,
-    done_show,
     evidence_text,
     fact_question,
-    folded,
     listed,
     listed_question,
     matching,
@@ -53,7 +50,6 @@ from .questions import (
     optional_text,
     present,
     proposal,
-    question_show,
     setting_parser,
     summary_question,
 )
@@ -69,7 +65,6 @@ from .resources import (
     HERE,
     IDENTITY,
     KNOWN_STACKS,
-    relocated,
     NAME,
     NONE,
     OFF,
@@ -85,8 +80,6 @@ from .resources import (
     app_roles,
     load_json,
     msg,
-    repository,
-    say,
     sha256,
     slug,
 )
@@ -293,7 +286,7 @@ def setting_value(s: Session, key: str, where: str, name: str, meta: dict, entri
         if "in" in meta:
             return s.ask(listed_question(entries, key, where, meta, parse))
         return s.ask(decision_question(key, where, meta, parse))
-    value = s.value(key, parse, MISSING)
+    value = s.value(key, parse, MISSING, asked=True)
     if value is MISSING:
         value = s.ask(fact_question(s, key, where, meta, parse))
     return MISSING if value == "" else value
@@ -394,7 +387,6 @@ def app_entries(s: Session, modules: dict) -> list[dict]:
                         [option(name, labels.get(name, name), (candidates.get(name) or {}).get("check") or "") for name in ids],
                         list(candidates), evidence_text([record["why"] for record in candidates.values()]),
                         parse=chosen, detected=True)
-    folded(question, ids, True)
     apps = []
     for name in s.ask(question):
         base = candidates.get(name, {})
@@ -530,6 +522,8 @@ def write_answers(root: Path, state: dict) -> None:
     data["answers"] = dict(sorted(state["answers"].items()))
     if state.get("reopened"):
         data["reopened"] = dict(sorted(state["reopened"].items()))
+    if state.get("reopened"):
+        data["alone"] = state.get("alone", [])
     (root / ANSWERS).parent.mkdir(parents=True, exist_ok=True)
     (root / ANSWERS).write_text(json_text(data), encoding="utf-8", newline="\n")
 
@@ -553,9 +547,10 @@ def removed(item: Question, value):
 
 
 def owner_question(catalog: dict, tree: Tree, answers: dict, incoming: set, reopened: dict,
-                   summaries: dict) -> Question | None:
+                   summaries: dict, alone: set, strict: bool, defaults: bool) -> Question | None:
     while True:
-        session = Session(catalog, tree, answers, incoming, reopened=reopened, decisions=True, batching=True)
+        session = Session(catalog, tree, answers, incoming, defaults=defaults, reopened=reopened, decisions=True,
+                          batching=True, alone=alone, strict=strict)
         try:
             configured(session)
         except Pending:
@@ -574,12 +569,13 @@ def owner_question(catalog: dict, tree: Tree, answers: dict, incoming: set, reop
             if item.id in revised:
                 answers.pop(item.id, None)
                 reopened[item.id] = removed(item, value)
+                alone.add(item.id)
             else:
-                proposed = value if item.proposed is None else item.proposed
-                answers[item.id] = {"value": value, "by": "default" if item.catalog and value == proposed else "owner"}
+                listed = item.catalog_value is not None and value == item.catalog_value
+                answers[item.id] = {"value": value, "by": "default" if listed else "owner"}
 
 
-def migrate(answers: dict, reopened: dict, catalog: dict) -> None:
+def migrate(answers: dict, reopened: dict, catalog: dict, alone: set) -> None:
     runners = answers.get("agents.runners", {})
     if isinstance(runners.get("value"), dict) and "agents.tools" not in answers:
         answers["agents.tools"] = {"by": runners.get("by", "owner"), "value": {
@@ -601,19 +597,29 @@ def migrate(answers: dict, reopened: dict, catalog: dict) -> None:
             answers.setdefault(f"modules.ci-agent.extensions.{kind}.auth", auth)
     if len(found) > 1:
         reopened["modules.ci-agent"] = answers.pop("modules.ci-agent")["value"]
+        alone.add("modules.ci-agent")
 
 
-def configure(args: argparse.Namespace) -> int:
-    root = repository(args.target)
-    with relocated(root, temporary=True):
-        return report(args, settle(args, root))
+def reopen_all(answers: dict, reopened: dict) -> None:
+    for key in list(answers):
+        by = answers[key].get("by")
+        if key.startswith("apps.") and key.rsplit(".", 1)[-1] in APP_FACTS:
+            continue
+        if by in ("detected", "default"):
+            del answers[key]
+        elif by != PACKED:
+            entry = answers.pop(key)
+            reopened[key] = entry.get("value", entry.get("raw"))
 
 
-def settle(args: argparse.Namespace, root: Path) -> tuple[Question | None, list[str], dict]:
+def settle(root: Path, given: dict | None = None, change: bool = False, strict: bool = False,
+           defaults: bool = False) -> tuple[Question | None, list[str], list[dict]]:
+    given = dict(given or {})
     catalog = load_catalog()
     state = read_answers(root)
     answers, reopened = state.setdefault("answers", {}), state.setdefault("reopened", {})
-    migrate(answers, reopened, catalog)
+    alone = set(state.get("alone", reopened))
+    migrate(answers, reopened, catalog, alone)
     for entries in (answers, reopened):
         for key in list(entries):
             try:
@@ -631,55 +637,32 @@ def settle(args: argparse.Namespace, root: Path) -> tuple[Question | None, list[
     for key, value in packed_decisions().items():
         if key not in answers and key not in reopened:
             answers[key] = {"value": value, "by": PACKED}
-    for module in args.reopen:
-        if module in catalog["modules"]:
-            prefix = ["modules", module]
-            groups = [group.id for group in choice_groups(module, catalog["modules"][module])]
-            groups += [f"agents.{key}" for key in catalog["agents"]] if module == "agents" else []
-        else:
-            try:
-                known_id(module, catalog)
-            except Refusal:
-                raise Refusal(msg("configure_unknown_module", module, ", ".join(["apps", *catalog["order"]]))) from None
-            prefix, groups = module.split("."), []
-        for key in [key for key in answers if key.split(".")[:len(prefix)] == prefix or key in groups]:
-            if module == "apps" and key.split(".")[2:3] and key.split(".")[2] in APP_FACTS:
-                continue
-            entry = answers.pop(key)
-            reopened[key] = entry.get("value", entry.get("raw"))
-    incoming, summaries = set(), {}
-    for pair, by in [(pair, "agent") for pair in args.set] + [(pair, "owner") for pair in args.answer]:
-        key, separator, value = pair.partition("=")
-        if not separator:
-            raise Refusal(msg("configure_pair", pair))
+    if change:
+        reopen_all(answers, reopened)
+        alone.clear()
+    if defaults:
+        if alone & set(reopened):
+            raise Refusal(msg("configure_reopened", ", ".join(sorted(alone & set(reopened)))))
+        for key, value in reopened.items():
+            answers.setdefault(key, {"value": value, "by": "owner"})
+        reopened.clear()
+    summaries = {key: given.pop(key) for key in SUMMARIES if key in given}
+    for key, value in given.items():
         known_id(key, catalog)
-        if key.removeprefix("docs.") in DOCS_ASKED:
-            try:
-                docs_list(value)
-            except ValueError as error:
-                raise Refusal(msg("configure_bad_answer", key, error)) from None
-        if key in SUMMARIES:
-            if by != "owner":
-                raise Refusal(msg("configure_decision_owner", key))
-            summaries[key] = value
-            continue
-        answers[key] = {"raw": value, "by": by}
+        answers[key] = {"raw": value, "by": "owner"}
         reopened.pop(key, None)
-        incoming.add(key)
+        alone.discard(key)
     tree = Tree(root)
-    pending = owner_question(catalog, tree, answers, incoming, reopened, summaries)
+    pending = owner_question(catalog, tree, answers, set(given), reopened, summaries, alone, strict, defaults)
     if summaries:
-        raise Refusal(msg("configure_unused", ", ".join(sorted(summaries))))
-    session = Session(catalog, tree, answers, incoming, reopened=reopened)
+        raise Refusal(msg("configure_summary_unused", ", ".join(sorted(summaries))))
+    session = Session(catalog, tree, answers, set(given), defaults=defaults, reopened=reopened, strict=strict)
     project = None
     if pending is None:
         try:
             project = configured(session)
         except Pending as stop:
             pending = stop.question
-    unused = sorted(incoming - session.seen) if project is not None else []
-    if unused:
-        raise Refusal(msg("configure_unused", ", ".join(unused)))
     problems = []
     if project is not None:
         text = json_text(project)
@@ -689,21 +672,9 @@ def settle(args: argparse.Namespace, root: Path) -> tuple[Question | None, list[
         state["manifest"] = sha256(text.encode("utf-8"))
         state["manifestKeys"] = sorted(answers_from(project, catalog))
         problems = validate(project, root, catalog)
+        for key, value in reopened.items():
+            answers.setdefault(key, {"value": value, "by": "owner"})
+        reopened.clear()
+    state["alone"] = sorted(alone & set(reopened))
     write_answers(root, state)
     return pending, problems, session.answered
-
-
-def report(args: argparse.Namespace, settled: tuple[Question | None, list[str], dict]) -> int:
-    pending, problems, answered = settled
-    if args.next:
-        found = pending.public() if pending else {"done": True, "manifest": PROJECT, "problems": problems}
-        shown = question_show(found, answered) if pending else done_show(found, answered)
-        print(json_text({**found, "answered": answered, "show": shown}), end="")
-        return 0
-    if pending:
-        say("configure_pending", pending.id, pending.text)
-        return 1
-    say("configure_done", PROJECT, ANSWERS)
-    for line in problems:
-        print("  - " + line)
-    return 1 if problems else 0

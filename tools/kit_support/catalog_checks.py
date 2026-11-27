@@ -21,7 +21,7 @@ SETTING_NAME_MARKS = (":", ";", "(", ")", " - ")
 NAME_MARKS = (*SETTING_NAME_MARKS, ",")
 NAME_START = re.compile(r"[a-z.\d]")
 PHRASE_CAPITAL = re.compile(r"[А-ЯЁ](?![А-ЯЁ])")
-OFF_ADVICE = re.compile(r"\bconfigure\b|<комплект>|install\.py|--reopen|включите|подключите", re.I)
+OFF_ADVICE = re.compile(r"\bconfigure\b|\bah (?:init|change)\b|ah\.py|<комплект>|install\.py|--reopen|включите|подключите", re.I)
 TYPOGRAPHY = re.compile(r"[—–«»…→]|кэш", re.I)
 LOOSE_EXAMPLE = re.compile(r"(?<!; )например")
 
@@ -163,7 +163,7 @@ def standard_problems() -> list[str]:
 
 def listed_reference(modules: dict, where: str, reference: str) -> bool:
     """Ссылка in называет настройку-список записей каталога и его поле, а модуль списка спрашивается раньше
-    модуля ссылки: configure предлагает имена уже собранного списка."""
+    модуля ссылки: настройка предлагает имена уже собранного списка."""
     path, key, field = reference_parts(reference)
     spec = dict(setting_holders(modules)).get(path, {}).get(key, {})
     fields = spec.get("fields", {})

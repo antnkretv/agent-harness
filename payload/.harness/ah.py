@@ -2,6 +2,8 @@
 
     python3 .harness/ah.py install [--archive <архив>]   # Windows: py -3 .harness/ah.py install
     python3 .harness/ah.py upgrade [--version <версия> | --commit <ветка или коммит>]  # ветка, lock и PR
+    python3 .harness/ah.py change                         # смена настроек: вопросы с прежними ответами, затем apply
+    python3 .harness/ah.py doctor                         # зависимости комплекта против машины
 
 Кеш хранит версию под ее kit.tree. Версии нет в кеше - загрузчик собирает комплект из kit.commit репозитория
 kit.repository, а без kit.commit скачивает архив выпуска; файлы любого источника сверяются с kit.tree.

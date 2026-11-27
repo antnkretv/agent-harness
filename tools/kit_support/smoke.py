@@ -44,13 +44,69 @@ from .source import leak_rules, leaks
 
 INSTALLER_PATHS = (".harness/state/harness.py", ".harness/state/installer", ".harness/state/kit.json",
                    ".harness/state/messages.env", *(f"{folder}/skills/{name}" for folder in (".agents", ".claude", ".cursor", ".codex")
-                                                        for name in ("harness-init", "harness-sync", "harness-configure")))
+                                                        for name in ("harness-init", "harness-sync")))
 
 # Сценарии ставят комплект от имени человека: признаки агентской сессии, в которой идет проверка, в фикстуры не переносятся.
 AGENT_ENV = {pair.partition("=")[0] for pair in
              json.loads((KIT / "payload" / METHODOLOGY).read_text(encoding="utf-8"))["policies"]["authorship"]["agentEnv"]}
 ENV = {**{key: value for key, value in os.environ.items() if key not in AGENT_ENV and not key.startswith("HARNESS_TASK_")},
        **IDENTITY}
+
+
+WINDOWS_REASON = "буквой диска"
+WALKER = """
+import json, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from installer.configure import settle
+from installer.resources import Refusal
+root, summaries = Path(sys.argv[2]), json.loads(sys.argv[3])
+asked, items, given = [], {}, {}
+try:
+    while len(asked) < 500:
+        pending, problems, _ = settle(root, given, strict=True)
+        if pending is None:
+            print(json.dumps({"asked": asked, "items": items, "problems": problems}))
+            sys.exit(0)
+        value = summaries.get(pending.id, pending.default)
+        if value is None:
+            print(json.dumps({"stuck": pending.id, "text": pending.text}))
+            sys.exit(1)
+        asked.append(pending.id)
+        if pending.items is not None:
+            items[pending.id] = pending.items
+        given = {pending.id: value}
+except Refusal as error:
+    print(error, file=sys.stderr)
+    sys.exit(2)
+sys.exit(1)
+"""
+
+PROMPTER = """
+import json, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from installer import prompt
+prompt.questionary()
+from prompt_toolkit.application import create_app_session
+from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.output import DummyOutput
+keys, asked, items, shown = json.loads(sys.argv[3]), [], [], prompt.asked
+
+
+def scripted(library, question):
+    asked.append(question.id)
+    items.extend(item["id"] for item in question.items or [])
+    with create_pipe_input() as pipe:
+        pipe.send_text(keys.get(question.id, "\\r"))
+        with create_app_session(input=pipe, output=DummyOutput()):
+            return shown(library, question)
+
+
+prompt.terminal, prompt.asked = (lambda: True), scripted
+problems = prompt.answered(Path(sys.argv[2]), sys.argv[4] == "change")
+print(json.dumps({"asked": asked, "items": items, "problems": problems}))
+"""
 
 
 def run(command: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
@@ -465,15 +521,15 @@ class Smoke:
         self.commit("chore: smoke-kit-eol")
 
     def windows_paths(self) -> None:
-        """Аргумент с /, который Git Bash переписал в путь Windows, отклоняет и ответ configure, и манифест."""
+        """Путь Windows с буквой диска вместо пути от корня отклоняют и ответ настройки, и манифест."""
         converted = "C:/Users/smoke/AppData/Local/Programs/Git/node_modules/"
-        self.expect(msg("smoke_msys_answer"), self.installer(self.installed) + [
-            "configure", "--target", str(self.repo), "--answer", f"docs.generatedSegments={converted}"], 2, reason="MSYS")
+        self.seed({"docs.generatedSegments": converted})
+        self.expect(msg("smoke_msys_answer"), self.walker(self.installed), 2, reason=WINDOWS_REASON)
         self.restore()
         project = self.read_json(PROJECT)
         project["docs"]["generatedSegments"] = [converted]
         self.write_json(PROJECT, project)
-        self.expect(msg("smoke_msys_manifest"), self.apply(), 2, reason="MSYS")
+        self.expect(msg("smoke_msys_manifest"), self.apply(), 2, reason=WINDOWS_REASON)
         self.restore()
 
     def violations(self) -> None:
@@ -752,14 +808,11 @@ class Smoke:
             published.write_bytes(data)
             published.with_name(published.name + ".sha256").write_text(f"{sha256(data)}  {published.name}\n")
         version = shipped["version"]
-        old = lock["kit"]["version"]
         self.write_json(LOCK, lock)
         self.commit("chore: harness releases")
         empty = {"AGENT_HARNESS_CACHE": str(self.work / "download-cache")}
         self.expect(msg("smoke_release_download"), [sys.executable, str(self.repo / LOADER), "install"], env=empty)
         self.check(msg("smoke_release_cached"), (self.work / "download-cache" / lock["kit"]["tree"] / "ah.py").is_file())
-        self.configure(msg("smoke_upgrade_answered"))
-        self.commit("chore: harness answers")
         self.expect(msg("smoke_upgrade"), self.harness("upgrade", "--version", version, "--no-pr"))
         self.check(msg("smoke_upgraded"), self.read_json(LOCK)["kit"]["version"] == version
                    and self.read(EDITED).endswith("smoke-kit-line\n"))
@@ -809,8 +862,6 @@ class Smoke:
         lock = self.read_json(LOCK)
         lock["kit"]["repository"] = source.as_uri()
         self.write_json(LOCK, lock)
-        self.configure(msg("smoke_upgrade_answered"), kit=first)
-        self.commit("chore: harness answers")
         self.expect(msg("smoke_commit_upgrade"), self.harness("upgrade", "--commit", "develop", "--no-pr"))
         self.check(msg("smoke_commit_upgraded"), self.read_json(LOCK)["kit"].get("commit") == new
                    and self.read(EDITED).endswith("smoke-kit-line\n"))
@@ -832,13 +883,111 @@ class Smoke:
         return folder
 
     def initialized(self) -> None:
-        """init в пустом проекте: вопросы настройки, затем оболочка, манифест, lock и версия в кеше; второй init отказывает."""
+        """init в пустом проекте без терминала: вопрос без ответа и без значения по умолчанию - отказ с его id; с
+        ответами в answers.json - оболочка, манифест, lock и версия в кеше; повторный init ничего не меняет."""
         self.bootstrap()
-        command = ("init", "--archive", str(self.archive_of(self.kit)))
-        self.check(msg("smoke_init"), self.walk(dict(pair.split("=", 1) for pair in self.answers()), command=command) is not None
-                   and self.read_json(LOCK)["kit"].get("tree") == archive_build(self.archive_of(self.kit))[2]
-                   and self.linked() and (self.repo / PROJECT).is_file())
-        self.expect(msg("smoke_init_again"), self.installer() + [*command, "--target", str(self.repo)], 2, reason=LOCK)
+        command = self.installer() + ["init", "--archive", str(self.archive_of(self.kit)), "--target", str(self.repo)]
+        self.expect(msg("smoke_init_unanswered"), command, 2, reason="shape")
+        self.seed(dict(pair.split("=", 1) for pair in self.answers()))
+        if not self.expect(msg("smoke_init"), command):
+            return
+        self.check(msg("smoke_init_state"), self.read_json(LOCK)["kit"].get("tree") == archive_build(self.archive_of(self.kit))[2]
+                   and self.linked() and (self.repo / PROJECT).is_file()
+                   and self.read_json(ANSWERS)["answers"].get("project.name", {}).get("by") == "detected"
+                   and all(self.read_json(ANSWERS)["answers"].get(key, {}).get("by") == "default"
+                           for key in ("agents.cli", "agents.tools"))
+                   and self.read_json(ANSWERS)["answers"].get("modules.forge", {}).get("by") == "detected")
+        self.commit("chore: harness")
+        if self.expect(msg("smoke_init_again"), command):
+            self.check(msg("smoke_init_idempotent"), self.clean())
+        self.seed({"modules.githooks": "commit-msg"})
+        change = self.installer() + ["change", "--target", str(self.repo)]
+        kept = self.expect(msg("smoke_change_unattended"), change) and self.expect(msg("smoke_change_unattended"), change)
+        self.check(msg("smoke_change_owner"), kept and self.owner_kept())
+        state = self.read_json(ANSWERS)
+        state["reopened"], state["alone"] = {"modules.githooks": ["off"]}, ["modules.githooks"]
+        state["answers"].pop("modules.githooks")
+        self.write_json(ANSWERS, state)
+        before = self.read(ANSWERS), self.read(PROJECT)
+        self.expect(msg("smoke_change_reopened"), change, 2, reason="modules.githooks")
+        self.check(msg("smoke_change_reopened_kept"), (self.read(ANSWERS), self.read(PROJECT)) == before
+                   and list(self.read_json(PROJECT)["modules"]["githooks"]["extensions"]) == ["commit-msg"])
+
+    def owner_kept(self) -> bool:
+        """Решение владельца не по значению каталога остается его ответом и попадает в манифест."""
+        stored = self.read_json(ANSWERS)["answers"]
+        manifest = self.read_json(PROJECT)["modules"]["githooks"]["extensions"]
+        return stored.get("modules.githooks") == {"value": ["commit-msg"], "by": "owner"} and list(manifest) == ["commit-msg"]
+
+    def prompted(self) -> None:
+        """Вопросы в терминале: questionary ставится в кеш, выбор, отметки и сводный вопрос дают ответы владельца."""
+        self.bootstrap()
+        last = "\x1b[A \r"
+        keys = {"modules.agents": " \r", "modules.backend": last, "modules.frontend": last, "defaults": " \r"}
+        found = self.prompter(keys, "init")
+        stored = self.read_json(ANSWERS)["answers"] if (self.repo / ANSWERS).is_file() else {}
+        asked = found.get("asked", [])
+        dropped = asked[asked.index("defaults") + 1] if "defaults" in asked[:-1] else ""
+        self.check(msg("smoke_prompt"), bool(found) and not found["problems"] and (self.repo / PROJECT).is_file()
+                   and stored.get("modules.agents") == {"value": ["claude-code"], "by": "owner"}
+                   and stored.get("shape", {}).get("by") == "owner")
+        self.check(msg("smoke_prompt_summary"), bool(dropped) and dropped in stored and stored[dropped]["by"] == "owner")
+        self.seed({"modules.githooks": "commit-msg"})
+        self.prompter({}, "init")
+        manifest = self.read(PROJECT) if (self.repo / PROJECT).is_file() else ""
+        changed = self.prompter({}, "change")
+        separate = set(changed.get("items", [])) & set(changed.get("asked", []))
+        self.check(msg("smoke_prompt_change"), bool(changed) and {"stack", "defaults"} <= set(changed["asked"])
+                   and not separate and self.read(PROJECT) == manifest and self.owner_kept())
+        state = self.read_json(ANSWERS)
+        state["reopened"], state["alone"] = {"modules.githooks": ["off"]}, ["modules.githooks"]
+        state["answers"].pop("modules.githooks")
+        self.write_json(ANSWERS, state)
+        resumed = self.prompter({}, "change")
+        self.check(msg("smoke_prompt_resume"), resumed.get("asked", [None])[0] == "modules.githooks"
+                   and "stack" not in resumed.get("asked", []))
+        project = self.read_json(PROJECT)
+        rule = {"id": "prose", "reason": msg("smoke_no_forge_reason"), "replacement": msg("smoke_no_forge_reason")}
+        project["rules"] = {"disabled": [rule]}
+        self.write_json(PROJECT, project)
+        again = [self.prompter({}, "change"), self.prompter({}, "change")]
+        self.check(msg("smoke_prompt_rules"), all(again) and self.read_json(PROJECT).get("rules", {}).get("disabled") == [rule]
+                   and {"stack", "defaults"} <= set(again[1].get("asked", []))
+                   and not self.read_json(ANSWERS).get("reopened"))
+        script = "tools/env.sh"
+        self.write(script, "#!/usr/bin/env bash\n")
+        self.seed({"modules.agents.settings.envScript": script})
+        self.prompter({}, "init")
+        fact = self.prompter({}, "change")
+        stored = self.read_json(ANSWERS)["answers"].get("modules.agents.settings.envScript", {})
+        self.check(msg("smoke_prompt_fact"), "modules.agents.settings.envScript" in fact.get("asked", [])
+                   and stored.get("value") == script)
+
+    def prompter(self, keys: dict, command: str) -> dict:
+        done = run([sys.executable, "-B", "-c", PROMPTER, str(self.kit), str(self.repo), json.dumps(keys), command], self.repo)
+        found = json.loads(done.stdout.strip().splitlines()[-1]) if done.returncode == 0 and done.stdout.strip() else {}
+        if not found:
+            print(done.stdout + done.stderr, flush=True)
+        return found
+
+    def scripted(self) -> None:
+        """install.sh выпуска: скачивает архив версии, сверяет sha256 и ставит проект через ah init."""
+        self.bootstrap()
+        shipped = json.loads((self.kit / "kit.json").read_text(encoding="utf-8"))
+        releases = (self.work / "script-releases").as_uri()
+        published = Path(loader().release({**shipped, "repository": releases}).removeprefix("file://"))
+        published.parent.mkdir(parents=True, exist_ok=True)
+        data = self.archive_of(self.kit).read_bytes()
+        published.write_bytes(data)
+        checksum = published.with_name(published.name + ".sha256")
+        env = {"AGENT_HARNESS_NAME": shipped["name"], "AGENT_HARNESS_VERSION": shipped["version"],
+               "AGENT_HARNESS_REPOSITORY": releases}
+        checksum.write_text(f"{'0' * 64}  {published.name}\n")
+        self.expect(msg("smoke_script_sha"), ["bash", str(KIT / "install.sh")], 2, reason="sha256", env=env)
+        checksum.write_text(f"{sha256(data)}  {published.name}\n")
+        self.seed(dict(pair.split("=", 1) for pair in self.answers()))
+        if self.expect(msg("smoke_script"), ["bash", str(KIT / "install.sh")], env=env):
+            self.check(msg("smoke_script_state"), self.linked() and (self.repo / PROJECT).is_file())
 
     def linked(self) -> bool:
         """Каталог комплекта ведет на версию в кеше, которую называет lock.json текущей ветки."""
@@ -846,7 +995,7 @@ class Smoke:
         return (self.repo / ".harness/kit").resolve() == pinned.resolve()
 
     def sequence(self) -> None:
-        """Вопросы configure --next для одного дерева идут в одном порядке и дают один манифест."""
+        """Вопросы настройки для одного дерева идут в одном порядке и дают один манифест."""
         self.bootstrap()
         scripted = dict(pair.split("=", 1) for pair in self.answers())
         walks, shown = [], {}
@@ -858,7 +1007,7 @@ class Smoke:
         self.check(msg("smoke_next_static"), "defaults" in asked and not {"agents.cli", "agents.tools"} & set(asked))
         summary = shown.get("defaults", {})
         self.check(msg("smoke_next_show"), bool(summary.get("items")) and all(
-            f"| `{item['id']}` |" in summary["show"] for item in summary["items"]))
+            item["id"].startswith(("modules.", "git.")) for item in summary["items"]))
         self.forget()
         revised = self.walk(scripted, summaries={"defaults": "modules.githooks,modules.agents.settings.pushback"})
         order = revised[0] if revised else []
@@ -887,30 +1036,36 @@ class Smoke:
         for path in (PROJECT, ANSWERS):
             (self.repo / path).unlink(missing_ok=True)
 
+    def seed(self, scripted: dict) -> None:
+        """Ответы сценария владелец записал в answers.json: init и change берут их оттуда."""
+        path = self.repo / ANSWERS
+        state = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+        state.setdefault("answers", {}).update({key: {"raw": value, "by": "owner"} for key, value in scripted.items()})
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    def walker(self, kit: Path | None = None, summaries: dict | None = None) -> list[str]:
+        """Вопросы настройки без терминала, как их проходит init: ответ сценария или ответ вопроса по умолчанию."""
+        return [sys.executable, "-B", "-c", WALKER, str(kit or self.kit), str(self.repo), json.dumps(summaries or {})]
+
     def walk(self, scripted: dict, kit: Path | None = None, summaries: dict | None = None,
-             shown: dict | None = None, command: tuple[str, ...] = ("configure",)) -> tuple[list[str], str] | None:
-        """Ответы сценария первым вызовом, на сводный вопрос - ответ summaries, на каждый следующий вопрос - его
+             shown: dict | None = None) -> tuple[list[str], str] | None:
+        """Ответы сценария в answers.json, на сводный вопрос - ответ summaries, на каждый следующий вопрос - его
         ответ по умолчанию. Итог - порядок и манифест."""
-        asked, answer = [], [part for key, value in scripted.items() for part in ("--answer", f"{key}={value}")]
-        while len(asked) < 500:
-            done = run(self.installer(kit) + [*command, "--target", str(self.repo), "--next", *answer], self.repo)
-            question = json.loads(done.stdout) if done.returncode == 0 else {}
-            if question.get("done"):
-                stored = json.loads(self.read(ANSWERS)).get("answers", {})
-                lost = [key for key in scripted if stored.get(key, {}).get("by") != "owner" or "value" not in stored[key]]
-                if lost:
-                    print(msg("smoke_answers_lost", ", ".join(lost)), flush=True)
-                    return None
-                return asked, self.read(PROJECT)
-            value = (summaries or {}).get(question.get("id"), question.get("default"))
-            if value is None:
-                print(done.stdout + done.stderr, flush=True)
-                return None
-            asked.append(question["id"])
-            if shown is not None:
-                shown[question["id"]] = question
-            answer = ["--answer", f"{question['id']}={','.join(value) if isinstance(value, list) else value}"]
-        return None
+        self.seed(scripted)
+        done = run(self.walker(kit, summaries), self.repo)
+        found = json.loads(done.stdout) if done.returncode == 0 else {}
+        if "asked" not in found:
+            print(done.stdout + done.stderr, flush=True)
+            return None
+        stored = json.loads(self.read(ANSWERS)).get("answers", {})
+        lost = [key for key in scripted if stored.get(key, {}).get("by") != "owner" or "value" not in stored[key]]
+        if lost:
+            print(msg("smoke_answers_lost", ", ".join(lost)), flush=True)
+            return None
+        if shown is not None:
+            shown.update({key: {"items": value} for key, value in found["items"].items()})
+        return found["asked"], self.read(PROJECT)
 
     def packed(self, full: bool) -> None:
         """Архив под решения: одни решения - один архив байт в байт, файлов стека другой стороны в нем нет,
@@ -935,10 +1090,11 @@ class Smoke:
                    and not any("{{" in (kit / guide).read_text(encoding="utf-8") for guide in GUIDES))
         self.adapters = ["dotnet"]
         self.bootstrap()
-        first = run(self.installer(kit) + ["configure", "--target", str(self.repo), "--next"], self.repo)
-        asked = json.loads(first.stdout) if first.returncode == 0 else {}
-        found = {entry["id"] for entry in asked.get("answered", [])}
-        self.check(msg("smoke_pack_facts"), bool(asked) and asked.get("id") not in BACKEND_DECISIONS and "project.name" in found)
+        first = self.walk({}, kit)
+        detected = self.read_json(ANSWERS)["answers"].get("project.name", {}).get("by") if first else None
+        self.check(msg("smoke_pack_facts"), first is not None and not set(first[0]) & set(BACKEND_DECISIONS)
+                   and detected == "detected")
+        self.forget()
         if self.configure(msg("smoke_pack_configure"), kit=kit) and self.expect(msg("smoke_pack_apply"), self.apply(kit)):
             self.installed = kit
             self.check(msg("smoke_pack_absent"), set(NODE_FILES) <= set(self.read_json(LOCK)["absent"]))
@@ -966,6 +1122,10 @@ def smoke(kit_folder: Path, adapters: list[str], kit: dict) -> list[str]:
         locked.locked()
         initialized = Smoke(kit_folder, [], root / "init")
         initialized.initialized()
+        script = Smoke(kit_folder, [], root / "script")
+        script.scripted()
+        terminal = Smoke(kit_folder, [], root / "prompt")
+        terminal.prompted()
         pinned = Smoke(kit_folder, [], root / "commit")
         pinned.committed()
         bare = Smoke(kit_folder, [], root / "no-ci")
@@ -982,6 +1142,6 @@ def smoke(kit_folder: Path, adapters: list[str], kit: dict) -> list[str]:
         for shape, adapter, absent in (("backend", "dotnet", NODE_FILES), ("frontend", "node", DOTNET_FILES))[:2 * bool(adapters)]:
             sides.append(Smoke(kit_folder, [adapter], root / shape))
             sides[-1].sided(shape, absent)
-        return [problem for each in (scenario, locked, initialized, pinned, bare, roles, steps, packed, hosted, *sides) for problem in each.problems]
+        return [problem for each in (scenario, locked, initialized, script, terminal, pinned, bare, roles, steps, packed, hosted, *sides) for problem in each.problems]
 
 

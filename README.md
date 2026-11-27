@@ -8,17 +8,35 @@
 
 ## Быстрый старт
 
-Собрать архив из `develop` (или скачать выпуск и сверить его `.sha256`), распаковать вне репозитория проекта:
+Подключить проект, один раз: в корне клона проекта выполнить команду установки последнего выпуска.
+
+```bash
+curl -fsSL https://github.com/antnkretv/agent-harness/releases/latest/download/install.sh | bash
+```
+
+На Windows - в PowerShell:
+
+```powershell
+irm https://github.com/antnkretv/agent-harness/releases/latest/download/install.ps1 | iex
+```
+
+Скрипт скачивает архив выпуска, сверяет его sha256 с опубликованным и запускает `ah init`: вопросы о
+модулях и настройках идут подряд в терминале, найденное в дереве установщик отвечает сам, а после последнего
+ответа ставит комплект. Ответы остаются в `.harness/project/answers.json`: повторный запуск берет их и
+спрашивает только новое. Нужны git, Python 3.11+ и pip.
+
+Установка лежит в клоне незакоммиченной. Ветку установки, поставщика кода и PR накатки дальше ведет агент:
+в сессии агента в том же клоне попросить выполнить `.harness/kit/skills/harness-init/SKILL.md` - скилл
+поставленной версии в кеше. Скилл переносит установку в ветку `chore/harness-install` и ведет этап 1 по
+[AGENT.md](AGENT.md); без чата те же шаги идут командами [STAGE-1.md](installer/stages/STAGE-1.md).
+
+Архив из `develop` вместо выпуска собирает `tools/kit.py`:
 
 ```bash
 git clone -b develop https://github.com/antnkretv/agent-harness "$HOME/src/agent-harness"
 python3 "$HOME/src/agent-harness/tools/kit.py" build --commit --out "$HOME/.cache/harness"   # архив и sha256
+python3 "$HOME/.cache/harness/agent-harness-<версия>/ah.py" init --target . --archive "$HOME/.cache/harness/agent-harness-<версия>.tar.gz"
 ```
-
-Подключить проект, один раз: в сессии агента в клоне проекта попросить выполнить
-`$HOME/.cache/harness/agent-harness-<версия>/skills/harness-init/SKILL.md` с путем к архиву и его sha256.
-Скилл ведет этап 1 по [AGENT.md](AGENT.md): рабочая копия ветки установки, `doctor`, вопросы владельцу,
-установка и PR. Без чата те же шаги идут командами [STAGE-1.md](installer/stages/STAGE-1.md).
 
 Поставить у разработчика, в CI и в облачной сессии; хуки `post-checkout`, `post-merge` и старт сессии агента
 зовут ее сами:
@@ -33,7 +51,8 @@ python3 .harness/ah.py install   # Windows: py -3 .harness/ah.py install
 python3 .harness/ah.py upgrade --commit develop   # или --version <версия>: ветка, новая версия, lock и черновой PR
 ```
 
-Обновление из архива и смена модулей - скиллы `harness-sync` и `harness-configure` архива
+Смена модулей и настроек - `python3 .harness/ah.py change` в терминале: все вопросы с прежними ответами,
+затем установка. Обновление из архива - скилл `harness-sync` архива
 ([AGENT.md](AGENT.md#обновление-и-смена-настроек)).
 
 ## Выпуск
