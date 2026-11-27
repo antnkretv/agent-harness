@@ -18,7 +18,7 @@ from pathlib import Path
 from .catalog import enabled, is_on, load_catalog, lookup, modules_of, validate, wanted
 from .configure import manifest_stale, module_evidence, read_answers
 from .detect import Tree
-from .documents import block_text, markers, outside_text
+from .documents import ENTRY_LINES, block_text, markers, outside_text, unwired
 from .questions import Session
 from .render import app_prefix, plan
 from .resources import (
@@ -50,7 +50,6 @@ from .resources import (
 )
 from .state import Installer, version_tuple
 from .links import installed_links, installed_test
-from .migrate import ENTRY_LINES, unwired
 
 
 SHELL_BUILTINS = frozenset({"cd", "test", "[", "exit", "true", ":", "export", "set", "source", ".", "eval", "exec", "command"})

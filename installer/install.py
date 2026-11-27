@@ -30,7 +30,6 @@ from .resources import (
     say,
 )
 from .lock_install import archive_build, place_files, record_path, recorded
-from .migrate import legacy_layout, relinked
 from .state import Installer
 from .verify import run_gate
 
@@ -116,8 +115,6 @@ def _apply(args: argparse.Namespace, root: Path) -> int:
         moved = place_files(root, kit, planned)
         installer.report += moved.report
         installer.unchanged += moved.unchanged
-        if legacy_layout(lock):
-            relinked(root, planned)
         write_lock(root, kit, catalog, enabled(project), files, tree)
         if not (root / SETTINGS).exists() and (root / SETTINGS_DEFAULTS).is_file():
             shutil.copyfile(root / SETTINGS_DEFAULTS, root / SETTINGS)

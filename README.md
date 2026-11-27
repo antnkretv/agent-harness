@@ -20,8 +20,8 @@ python3 "$HOME/src/agent-harness/tools/kit.py" build --commit --out "$HOME/.cach
 Скилл ведет этап 1 по [AGENT.md](AGENT.md): рабочая копия ветки установки, `doctor`, вопросы владельцу,
 установка и PR. Без чата те же шаги идут командами [STAGE-1.md](installer/stages/STAGE-1.md).
 
-Поставить у разработчика, в CI и в облачной сессии; хуки `post-checkout`, `post-merge` и старт сессии агента
-зовут ее сами:
+Поставить у разработчика, в CI и в облачной сессии; хуки `post-checkout`, `post-merge` и каждый хук агента
+(`.harness/ah.py hook`) зовут ее сами:
 
 ```bash
 python3 .harness/ah.py install   # Windows: py -3 .harness/ah.py install

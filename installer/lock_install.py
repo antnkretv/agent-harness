@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import tarfile
+import time
 from pathlib import Path
 
 from .catalog import load_catalog
@@ -16,6 +17,7 @@ from .verify import installed_kit
 RECORD = "harness/installed.json"
 EXCLUDE = "info/exclude"
 SECTION = "# harness:begin ", "# harness:end "
+LOCK_TRIES, LOCK_PAUSE = 100, 0.05
 
 
 def archive_build(archive: Path) -> tuple[str, dict, str]:
@@ -53,20 +55,57 @@ def exclude_sections(text: str) -> tuple[list[str], dict[str, list[str]]]:
     return own, sections
 
 
+def worktrees(root: Path) -> set[str]:
+    found = set()
+    for entry in git(root, "worktree", "list", "--porcelain").split("\n\n"):
+        lines = entry.splitlines()
+        if not lines or not lines[0].startswith("worktree ") or any(line.split(" ")[0] in ("bare", "prunable") for line in lines):
+            continue
+        dot = Path(lines[0][len("worktree "):]) / ".git"
+        if dot.is_file():
+            pointer = dot.read_text(encoding="utf-8").strip()
+            if not pointer.startswith("gitdir: "):
+                continue
+            dot = dot.parent / pointer[len("gitdir: "):]
+        found.add(os.path.normcase(os.path.realpath(dot)))
+    return found
+
+
+def claimed(lock: Path) -> int:
+    for _ in range(LOCK_TRIES):
+        try:
+            return os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o644)
+        except FileExistsError:
+            time.sleep(LOCK_PAUSE)
+    raise Refusal(msg("install_exclude_busy", lock))
+
+
 def exclude(root: Path, paths: list[str]) -> None:
     target = git_file(root, EXCLUDE)
     key = git(root, "rev-parse", "--absolute-git-dir")
-    text = target.read_text(encoding="utf-8") if target.is_file() else ""
-    own, sections = exclude_sections(text)
-    sections = {name: lines for name, lines in sections.items() if name != key and os.path.isdir(name)}
-    sections[key] = ["/" + path for path in sorted(paths)]
-    lines = own + [line for name, found in sections.items() for line in (SECTION[0] + name, *found, SECTION[1] + name)]
-    fresh = "\n".join(lines) + "\n"
-    if fresh != text:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        temporary = target.with_name(f".{target.name}.{os.getpid()}.harness-new")
-        temporary.write_text(fresh, encoding="utf-8", newline="\n")
-        os.replace(temporary, target)
+    live = worktrees(root)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    lock = target.with_name(target.name + ".lock")
+    handle, placed = claimed(lock), False
+    try:
+        text = target.read_text(encoding="utf-8") if target.is_file() else ""
+        own, sections = exclude_sections(text)
+        sections = {name: lines for name, lines in sections.items()
+                    if name != key and os.path.normcase(os.path.realpath(name)) in live}
+        sections[key] = ["/" + path for path in sorted(paths)]
+        lines = own + [line for name, found in sections.items() for line in (SECTION[0] + name, *found, SECTION[1] + name)]
+        fresh = "\n".join(lines) + "\n"
+        if fresh != text:
+            os.write(handle, fresh.encode("utf-8"))
+            os.close(handle)
+            handle = -1
+            os.replace(lock, target)
+            placed = True
+    finally:
+        if handle != -1:
+            os.close(handle)
+        if not placed:
+            lock.unlink(missing_ok=True)
 
 
 def recorded(record: Path) -> list[str]:

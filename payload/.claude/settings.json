@@ -14,7 +14,7 @@
 				"matcher": "startup|resume",
 				"hooks": [
 					{
-						"command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh",
+						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/ah.py\" hook session-start claude",
 						"statusMessage": "Настройка окружения (toolchain из манифеста проекта)...",
 						"timeout": 900,
 						"type": "command"
@@ -27,8 +27,7 @@
 				"matcher": "Edit|Write",
 				"hooks": [
 					{
-						"command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/comments-file.sh\"",
-						"shell": "bash",
+						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/ah.py\" hook comments-file",
 						"statusMessage": "Слой комментариев по изменённому файлу…",
 						"timeout": 120,
 						"type": "command"
@@ -40,7 +39,7 @@
 			{
 				"hooks": [
 					{
-						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/hooks/agent-gate.py\" claude prompt",
+						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/ah.py\" hook agent-gate claude prompt",
 						"timeout": 60,
 						"type": "command"
 					}
@@ -52,7 +51,7 @@
 				"matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
 				"hooks": [
 					{
-						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/hooks/agent-gate.py\" claude tool",
+						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/ah.py\" hook agent-gate claude tool",
 						"timeout": 60,
 						"type": "command"
 					}
@@ -63,7 +62,7 @@
 			{
 				"hooks": [
 					{
-						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/hooks/agent-gate.py\" claude stop",
+						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/ah.py\" hook agent-gate claude stop",
 						"statusMessage": "Конвейер разработки: следующий шаг…",
 						"timeout": 180,
 						"type": "command"

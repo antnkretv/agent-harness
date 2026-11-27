@@ -11,7 +11,7 @@ from manifest import extensions
 CLIENT_PATHS = {"claude-code": ".claude/settings.json", "codex": ".codex/rules/harness.rules",
                 "cursor": ".cursor/cli.json"}
 
-CURSOR_HOOK = {"command": "./.harness/hooks/python.cmd .harness/hooks/agent-deny.py cursor", "failClosed": True}
+CURSOR_HOOK = {"command": "./.harness/hooks/python.cmd .harness/ah.py hook agent-deny cursor", "failClosed": True}
 
 
 def compile_configs(policy: dict, clients: list[str], configs: dict[str, str]) -> dict[str, str]:

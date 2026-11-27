@@ -3,35 +3,35 @@
   "hooks": {
     "workspaceOpen": [
       {
-        "command": "./.harness/hooks/python.cmd .harness/lib/agent_links.py",
+        "command": "./.harness/hooks/python.cmd .harness/ah.py hook session-start cursor",
         "timeout": 60
       }
     ],
     "sessionStart": [
       {
-        "command": "./.harness/hooks/python.cmd .codex/hooks/session-start.py",
+        "command": "./.harness/hooks/python.cmd .harness/ah.py hook session-start cursor",
         "timeout": 900
       }
     ],
     "preToolUse": [
       {
-        "command": "./.harness/hooks/python.cmd .harness/hooks/agent-deny.py cursor",
+        "command": "./.harness/hooks/python.cmd .harness/ah.py hook agent-deny cursor",
         "failClosed": true
       },
       {
-        "command": "./.harness/hooks/python.cmd .harness/hooks/agent-gate.py cursor tool",
+        "command": "./.harness/hooks/python.cmd .harness/ah.py hook agent-gate cursor tool",
         "timeout": 60
       }
     ],
     "beforeSubmitPrompt": [
       {
-        "command": "./.harness/hooks/python.cmd .harness/hooks/agent-gate.py cursor prompt",
+        "command": "./.harness/hooks/python.cmd .harness/ah.py hook agent-gate cursor prompt",
         "timeout": 60
       }
     ],
     "stop": [
       {
-        "command": "./.harness/hooks/python.cmd .harness/hooks/agent-gate.py cursor stop",
+        "command": "./.harness/hooks/python.cmd .harness/ah.py hook agent-gate cursor stop",
         "timeout": 180,
         "loop_limit": 50
       }

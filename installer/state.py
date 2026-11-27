@@ -9,8 +9,8 @@ import subprocess
 import tomllib
 from pathlib import Path
 
-from .documents import block_of, compose, entry_markers, json_indent, json_text, kit_lists, layout, markers, merge_json, overlay_json
-from .migrate import converted, seeded, unwired
+from .documents import (block_of, compose, converted, entry_markers, json_indent, json_text, kit_lists, layout, markers, merge_json,
+                        overlay_json, seeded, unwired)
 from .render import AGENT_SERVERS, server_clashes
 from .resources import (
     PROJECT_BLOCK,
@@ -148,7 +148,7 @@ class Installer:
         self.report.append((path, msg("state_retired")))
 
     def remove(self, target: Path) -> None:
-        target.unlink()
+        target.unlink(missing_ok=True)
         prune(self.root, target)
 
     def managed(self, item: Item, previous: dict) -> dict:
@@ -186,11 +186,7 @@ class Installer:
         content = seeded(item.path, template).encode("utf-8") if markers(item.path, PROJECT_BLOCK)[0] in template \
             else item.content
         entry = {"role": "seed", "module": item.module, "edition": sha256(content)}
-        if target.exists() and previous.get("role") == "block" and markers(item.path, "core")[0] in target.read_text(encoding="utf-8"):
-            text = converted(item.path, target.read_text(encoding="utf-8", newline=""), template)
-            self.write(item.path, text.encode("utf-8"), item.executable)
-            self.report.append((item.path, msg("state_seed_converted")))
-        elif target.exists() and not previous and unwired(item.path, target.read_text(encoding="utf-8", errors="replace")):
+        if target.exists() and not previous and unwired(item.path, target.read_text(encoding="utf-8", errors="replace")):
             text = converted(item.path, target.read_text(encoding="utf-8"), template)
             self.write(item.path, text.encode("utf-8"), item.executable)
             self.report.append((item.path, msg("state_seed_wired")))

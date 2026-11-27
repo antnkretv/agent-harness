@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/hooks/forge-text-lint.py\" claude",
+            "command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/ah.py\" hook forge-text-lint claude",
             "timeout": 60
           }
         ]
@@ -14,7 +14,7 @@
       {
         "hooks": [
           {
-            "command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/hooks/agent-gate.py\" claude tool",
+            "command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/ah.py\" hook agent-gate claude tool",
             "timeout": 60,
             "type": "command"
           }
