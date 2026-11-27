@@ -4,7 +4,7 @@
 
 Все скиллы проекта живут в одном экземпляре в `.agents/skills/`, независимо от области и используемого ИИ-агента. Точка входа агента - [AGENTS.md](../AGENTS.md); правила письма для документации - [standards/documentation](../../docs/platform/standards/documentation.md).
 
-Каталог не привязан к конкретному агенту. Проектные правила перечислены в разделе `rules.own` манифеста [`.harness/project/manifest.json`](../project/manifest.json) ([как снять правило](../README.md#как-снять-правило)); скилл из раздела "Проектные скиллы" без записи в реестре отклоняет `check-docs.py --area agents`.
+Каталог не привязан к конкретному агенту. Проектные правила перечислены в разделе `rules.own` манифеста [`.harness/project/manifest.json`](../project/manifest.json) ([как снять правило](../README.md#как-снять-правило)); скилл из раздела "Проектные скиллы" [индекса проекта](../../.agents/skills/README.md) без записи в реестре отклоняет `check-docs.py --area agents`.
 
 Скиллы методологии приходят с комплектом harness и обновляются вместе с ним: факты проекта они не повторяют, а читают из манифеста [`.harness/project/manifest.json`](../project/manifest.json) и карты областей [`.harness/project/area-map.json`](../project/area-map.json). Свое правило пишется в скилл проекта или в `docs/`, а не дописывается в тело скилла методологии. Контракт слоя - [`.harness/README.md`](../README.md).
 
