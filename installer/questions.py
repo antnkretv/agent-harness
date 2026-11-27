@@ -13,8 +13,7 @@ from .catalog import (
     setting_problems,
 )
 from .detect import Tree
-from .render import markdown_cell
-from .resources import EVIDENCE_MAX, NONE, OFF, ON, OPTIONS_MAX, Refusal, SIDES, msg
+from .resources import EVIDENCE_MAX, NONE, OFF, ON, Refusal, SIDES, msg
 
 
 class Pending(Exception):
@@ -45,14 +44,6 @@ class Question:
     proposed: object = None
     catalog: bool = False
     catalog_value: object = None
-    legend: list | None = None
-
-    def public(self) -> dict:
-        default = value_text(self.default) if self.kind == "text" and isinstance(self.default, (list, dict)) else self.default
-        found = {"id": self.id, "kind": self.kind, "text": self.text, "options": self.options, "default": default,
-                 "why": self.why, "rule": self.rule}
-        extra = {"items": self.items, "legend": self.legend}
-        return {**found, **{name: value for name, value in extra.items() if value is not None}}
 
 
 def value_text(value) -> str:
@@ -63,54 +54,6 @@ def value_text(value) -> str:
     if isinstance(value, (list, dict)):
         return json.dumps(value, ensure_ascii=False)
     return "" if value is None else str(value)
-
-
-def cell(value) -> str:
-    return markdown_cell(value_text(value).replace("\n", " ") or msg("show_empty"))
-
-
-def bullets(title: str, entries: list[str]) -> list[str]:
-    return [title, *(f"- {entry}" for entry in entries), ""] if entries else []
-
-
-def facts(answered: list[dict]) -> list[str]:
-    return bullets(msg("show_answered"), [f"`{item['id']}` = {cell(item['value'])}" + (f" ({item['why']})" if item.get("why") else "")
-                                          for item in answered])
-
-
-def table(items: list[dict]) -> list[str]:
-    columns = [(msg("show_item"), lambda item: f"`{item['id']}`"), (msg("show_value"), lambda item: cell(item["value"]))]
-    if any(item["why"] for item in items):
-        columns.append((msg("show_found"), lambda item: markdown_cell(item["why"] or "-")))
-    if any("default" in item for item in items):
-        columns.append((msg("show_proposed"), lambda item: cell(item["default"]) if "default" in item else "-"))
-    rows = [[head for head, _ in columns], ["---"] * len(columns), *([value(item) for _, value in columns] for item in items)]
-    return ["", *("| " + " | ".join(row) + " |" for row in rows)]
-
-
-def choices(found: dict) -> list[str]:
-    default = found["default"]
-    rule = ["", msg("show_rule", found["rule"])] if found["rule"] else []
-    if not found["options"]:
-        notes = [(entry["value"], rules(entry["label"] if entry["label"] != entry["value"] else "", entry["description"]))
-                 for entry in found.get("legend", [])]
-        legend = [f"- **{value}**" + (f" - {note}" if note else "") for value, note in notes]
-        return [*([""] if legend else []), *legend, "",
-                msg("show_text") + ("" if default in (None, "") else " " + msg("show_text_default", cell(default))), *rule]
-    chosen = set(default) if isinstance(default, list) else {default}
-    return ["", *(f"- **{entry['label']}**" + (msg("show_default") if entry["value"] in chosen else "")
-                  + (f" - {entry['description']}" if entry["description"] else "") for entry in found["options"]), *rule]
-
-
-def question_show(found: dict, answered: list[dict]) -> str:
-    lines = [*facts(answered), f"**{found['text']}**", *(table(found["items"]) if found.get("items") else []), *choices(found)]
-    if found["why"] and not found.get("items"):
-        lines += ["", msg("show_why", found["why"]) if found["default"] not in (None, "", []) else msg("show_finding", found["why"])]
-    return "\n".join(lines)
-
-
-def done_show(found: dict, answered: list[dict]) -> str:
-    return "\n".join([*facts(answered), *bullets(msg("show_problems"), found["problems"]), msg("show_done")])
 
 
 def option(value: str, label: str, description: str = "") -> dict:
@@ -186,9 +129,10 @@ EMPTY = ([], {})
 
 class Session:
     def __init__(self, catalog: dict, tree: Tree, answers: dict, incoming=(), defaults: bool = False,
-                 reopened: dict | None = None, decisions: bool = False, batching: bool = False):
+                 reopened: dict | None = None, decisions: bool = False, batching: bool = False, alone=(),
+                 strict: bool = False):
         self.catalog, self.tree, self.answers = catalog, tree, answers
-        self.batching = batching
+        self.batching, self.alone, self.strict = batching, set(alone), strict
         self.incoming, self.defaults, self.decisions = set(incoming), defaults, decisions
         self.reopened = reopened if reopened is not None else {}
         self.seen: set[str] = set()
@@ -212,7 +156,7 @@ class Session:
         try:
             value = parse(entry["raw"] if "raw" in entry else entry["value"])
         except ValueError as error:
-            if key in self.incoming:
+            if key in self.incoming or self.strict and entry["by"] == "owner":
                 raise Refusal(msg("configure_bad_answer", key, error)) from None
             del self.answers[key]
             return MISSING
@@ -221,8 +165,6 @@ class Session:
 
     def unowned(self, key: str, catalog: bool = False) -> bool:
         by = self.answers.get(key, {}).get("by")
-        if by == "agent" and key in self.incoming:
-            raise Refusal(msg("configure_decision_owner", key))
         return by not in (None, "owner") and not (by == "default" and catalog) and not self.defaults
 
     def ask(self, question: Question):
@@ -250,7 +192,9 @@ class Session:
         if question.decision and question.catalog and not reopened and by == "default" and current is not None:
             self.answers[question.id] = {"value": current, "by": "default"}
         fixed = (question.static and by in (None, "default", "owner") or empty) and not reopened
-        if question.decision and self.unowned(question.id, question.catalog) and not fixed:
+        settled = by == "default" and question.catalog_value is not None and not reopened \
+            and self.stored(question.id, question.parse) == question.catalog_value
+        if question.decision and self.unowned(question.id, question.catalog or settled) and not fixed:
             prior = self.stored(question.id, question.parse)
             question.proposed = current
             if prior is not MISSING:
@@ -277,7 +221,7 @@ class Session:
         if not (self.batching and question.decision):
             raise Pending(question)
         default = parsed_default(question)
-        if question.batch and not reopened and default is not None:
+        if question.batch and question.id not in self.alone and default is not None:
             self.batch[question.batch].append((question, default))
             return default
         if self.single is None or (reopened or default is None) and self.single.id not in self.reopened:
@@ -383,7 +327,7 @@ def choice_question(name: str, spec: dict, group: ChoiceGroup, first: bool, valu
                         decision=True, detected=detected,
                         batch=DEFAULTS if catalog_default is not None else STACK if detected else "",
                         hint=lines[0] if lines else "", catalog=from_catalog, catalog_value=catalog_value)
-    return folded(question, values, multi)
+    return question
 
 
 def extension_note(meta: dict, evidence: list[str]) -> str:
@@ -462,14 +406,6 @@ def rules(*parts: str) -> str:
     return "; ".join(part for part in parts if part)
 
 
-def folded(question: Question, values, multi: bool) -> Question:
-    if len(question.options) > OPTIONS_MAX:
-        listing = ", ".join(values)
-        question.rule = rules(question.rule, msg("rule_values_multi", listing) if multi else msg("rule_values", listing))
-        question.kind, question.options, question.legend = "text", [], question.options
-    return question
-
-
 def listed_question(entries: dict, key: str, where: str, meta: dict, parse) -> Question:
     names = listed_names({"modules": entries}, meta["in"])
 
@@ -481,7 +417,7 @@ def listed_question(entries: dict, key: str, where: str, meta: dict, parse) -> Q
 
     text = msg("q_setting", meta.get("title", key), where)
     rule = rules(meta.get("rule", ""), msg("rule_listed", meta["in"], ", ".join(names) or "-"))
-    if names and len(names) <= OPTIONS_MAX:
+    if names:
         return Question(key, "single", text, [option(name, name) for name in names], names[0] if len(names) == 1 else None,
                         rule=rule, parse=member, decision=True)
     return Question(key, "text", text, rule=rule, parse=member, decision=True)
@@ -492,10 +428,10 @@ def decision_question(key: str, where: str, meta: dict, parse, default=None, why
     text, rule = msg("q_setting", meta.get("title", key), where), meta.get("rule", "")
     options = [option(value, value, about) for value, about in values.items()]
     if meta["shape"] in ("choice", "flag"):
-        question = folded(Question(key, "single", text, options, str(default).lower() if isinstance(default, bool) else default,
-                                   why, rule, parse=parse), values, False)
+        question = Question(key, "single", text, options, str(default).lower() if isinstance(default, bool) else default,
+                            why, rule, parse=parse)
     elif meta["shape"] == "choices":
-        question = folded(Question(key, "multi", text, options, default, why, rule, parse=parse), values, True)
+        question = Question(key, "multi", text, options, default, why, rule, parse=parse)
     else:
         question = Question(key, "text", text, [], default, why, rule, parse=parse)
     question.decision, question.static, question.hint = True, bool(meta.get("static")), why
@@ -515,15 +451,13 @@ def fact_question(s: Session, key: str, where: str, meta: dict, parse) -> Questi
     why = evidence_text(evidence) if evidence else msg("why_nothing") if meta.get("detect") else ""
     optional = not meta.get("required")
     if meta["shape"] == "texts" and values:
-        if len(values) <= OPTIONS_MAX:
-            return Question(key, "multi", text, [option(value, value, line) for value, line in zip(values, evidence)],
-                            values, why, rule, parse, detected=True)
-        return Question(key, "text", text, [], values, why, rule, parse, detected=True)
+        return Question(key, "multi", text, [option(value, value, line) for value, line in zip(values, evidence)],
+                        values, why, rule, parse, detected=True)
     if len(values) == 1:
         return Question(key, "text", text, [], values[0], why, rule, parse, detected=True)
     fallback = meta["default"] if "default" in meta else "" if optional and meta["shape"] == "text" else None
     default = None if values else fallback
-    if values and len(values) + optional <= OPTIONS_MAX:
+    if values:
         options = [option(value, value, line) for value, line in zip(values, evidence)]
         options += [option("", msg("option_absent"))] * optional
         return Question(key, "single", text, options, default, why, rule, parse)

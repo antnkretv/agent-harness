@@ -75,7 +75,7 @@ def undeclared(root: Path, project: dict, catalog: dict) -> list[Finding]:
 def manifest_synced(root: Path) -> list[Finding]:
     if not (root / ANSWERS).is_file() or not manifest_stale(root, read_answers(root)):
         return []
-    return [Finding("error", msg("verify_manifest_stale", PROJECT, ANSWERS, INSTALLER))]
+    return [Finding("error", msg("verify_manifest_stale", PROJECT, ANSWERS))]
 
 
 def setup_left(root: Path) -> list[Finding]:

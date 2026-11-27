@@ -10,7 +10,6 @@ from .documents import json_text
 from .render import absent_paths, plan, remediation
 from .resources import (
     GLOSSARY_RULE_TOOL,
-    INSTALLER,
     LOADER,
     LOCK,
     relocated,
@@ -142,5 +141,5 @@ def _apply(args: argparse.Namespace, root: Path) -> int:
         for line in remedies:
             print("  - " + line)
     if not args.dry_run:
-        say("apply_next", INSTALLER)
+        say("apply_next")
     return 0

@@ -24,6 +24,20 @@
       "purpose": "установщик и гейты - от 3.11, тот интерпретатор, который выбирает .harness/hooks/python.cmd; хуки агента (.harness/hooks/*.py и импортируемые ими модули .harness/lib) совместимы с 3.8: python машины агента не провизионируется"
     },
     {
+      "name": "pip",
+      "need": "required",
+      "minimum": "19.0",
+      "local": true,
+      "probe": [
+        "bash",
+        "{platform}/hooks/python.cmd",
+        "-m",
+        "pip",
+        "--version"
+      ],
+      "purpose": "ah init и ah change в терминале ставят им библиотеку вопросов questionary по installer/requirements.txt в кеш комплекта; без терминала не нужен"
+    },
+    {
       "name": "git",
       "need": "required",
       "minimum": "2.30",

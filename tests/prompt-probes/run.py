@@ -152,31 +152,20 @@ def build_kit(ref: str, folder: str) -> str:
 
 
 def install(kit: str, tree: str) -> None:
-    """Пустой проект без стека: настройка отвечает сценарием, на прочие решения - ответом по умолчанию."""
+    """Пустой проект без стека: ответы сценария лежат в answers.json, на прочие вопросы init без терминала берет
+    ответ по умолчанию. Сборка --before старше init без терминала пробу не поставит."""
     os.makedirs(tree)
     git("init", "-q", "-b", "develop", cwd=tree)
     git("remote", "add", "origin", f"https://github.com/{PROBE_REPO}.git", cwd=tree)
     write(os.path.join(tree, "README.md"), "# probe\n")
     commit(tree, INPUTS["snapshot_commit"])
     git("update-ref", "refs/remotes/origin/develop", "HEAD", cwd=tree)
-    installer = [sys.executable, os.path.join(kit, "ah.py")]
-    answer = [part for pair in ANSWERS for part in ("--answer", pair)]
-    for _ in range(300):
-        done = subprocess.run([*installer, "configure", "--target", tree, "--next", *answer], cwd=tree,
-                              capture_output=True, text=True, encoding="utf-8")
-        question = json.loads(done.stdout) if done.returncode == 0 else {}
-        if question.get("done"):
-            break
-        value = question.get("default")
-        if value is None:
-            raise ProbeError("harness", msg("probe_configure_failed", (done.stdout + done.stderr).strip()[-1500:]))
-        answer = ["--answer", f"{question['id']}={','.join(value) if isinstance(value, list) else value}"]
-    else:
-        raise ProbeError("harness", msg("probe_configure_failed", ""))
-    done = subprocess.run([*installer, "apply", "--target", tree], cwd=tree, capture_output=True, text=True,
-                          encoding="utf-8")
+    answers = {key: {"raw": value, "by": "owner"} for key, value in (pair.split("=", 1) for pair in ANSWERS)}
+    write(os.path.join(tree, ".harness", "project", "answers.json"), json.dumps({"answers": answers}, indent=2) + "\n")
+    done = subprocess.run([sys.executable, os.path.join(kit, "ah.py"), "init", "--target", tree, "--archive", kit + ".tar.gz"],
+                          cwd=tree, stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8")
     if done.returncode != 0:
-        raise ProbeError("harness", msg("probe_apply_failed", (done.stdout + done.stderr).strip()[-1500:]))
+        raise ProbeError("harness", msg("probe_configure_failed", (done.stdout + done.stderr).strip()[-1500:]))
     sanitize(tree)
     commit(tree, INPUTS["install_commit"])
 
