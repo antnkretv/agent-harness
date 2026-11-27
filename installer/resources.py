@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -101,6 +102,18 @@ def git(root: Path, *args: str, check: bool = True, input: str | None = None) ->
     return done.stdout.strip()
 
 
+def hidden(root: Path, paths) -> list[tuple[str, str, str, str]]:
+    tracked = set(git(root, "ls-files", "-z").split("\0"))
+    wanted = [path for path in paths if path not in tracked and (root / path).is_file()]
+    if not wanted:
+        return []
+    done = subprocess.run(["git", "check-ignore", "--verbose", "--stdin", "-z"], cwd=root,
+                          input="".join(path + "\0" for path in wanted).encode("utf-8"), capture_output=True)
+    fields = done.stdout.decode("utf-8").split("\0")
+    records = [fields[start:start + 4] for start in range(0, len(fields) - 3, 4)]
+    return sorted((path, pattern, source, number) for source, number, pattern, path in records if pattern == "/" + path)
+
+
 def tracks_modes(root: Path) -> bool:
     return POSIX_MODES and git(root, "config", "--bool", "core.fileMode", check=False) != "false"
 
@@ -154,6 +167,22 @@ def kit_root() -> Path:
     raise Refusal(msg("no_kit", HERE))
 
 
+def kit_tree(root: Path | None = None) -> str:
+    root = root or kit_root()
+    if (root / "tools").is_dir() or (root / ".git").exists():
+        return ""
+    return loader().tree_digest((path.relative_to(root).as_posix(), path.read_bytes()) for path in root.rglob("*")
+                                if path.is_file() and "__pycache__" not in path.parts)
+
+
+@functools.cache
+def loader():
+    spec = importlib.util.spec_from_file_location("ah_loader", kit_root() / "payload" / LOADER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_json(path: Path, missing: str) -> dict:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -169,10 +198,6 @@ def load_json(path: Path, missing: str) -> dict:
 def unpack(archive: Path, into: Path) -> None:
     with tarfile.open(archive) as tar:
         tar.extractall(into, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
-
-
-def build_of(kit: dict) -> tuple:
-    return kit.get("version"), kit.get("digest"), kit.get("config") or kit.get("packed", {}).get("config")
 
 
 def manifest_moved(root: Path, lock: dict) -> bool:

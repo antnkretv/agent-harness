@@ -71,7 +71,7 @@ Issue алерта: #${ISSUE}.
    гипотезу не исправляй. PR закрывает часть причин - итог называет остальные. Ветку задачи
    #${ISSUE} от `{{git.baseBranch}}` и рабочую копию обвязка выделила до сессии, другую ветку не
    создавай. Правка, проверки затронутых областей, черновой PR
-   (`./.harness/hooks/python.cmd .harness/lib/forge.py open-change --draft`, заголовок - по `CONTRIBUTING.md` §3) с описанием из заготовки
+   (`./.harness/hooks/python.cmd .harness/lib/forge.py open-change --draft`, заголовок - по `.harness/CONTRIBUTING.md` §3) с описанием из заготовки
    `./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py form ChangeBody --out <файл>` с заполненными слотами и сборкой
    `./.harness/hooks/python.cmd .harness/scripts/text/text_templates.py render change/description --set-file ChangeBody=<файл> --refs ${ISSUE} --out <описание>`: строку
    `Refs #${ISSUE}` подставит команда, закрывающую связь не ставь. Issue алерта остается открытой до подтвержденного восстановления,

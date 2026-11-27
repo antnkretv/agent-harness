@@ -29,6 +29,6 @@ def manifest() -> dict:
 
 catalog = load_catalog
 
-REFERENCE = "docs/platform/agents/harness-parameters.md"
+REFERENCE = ".harness/docs/harness-parameters.md"
 
 

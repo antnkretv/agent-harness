@@ -34,9 +34,10 @@ from .resources import (
     SERVICE_AREAS,
     SETUP,
     SETUP_PHASES,
-    build_of,
     git,
+    hidden,
     index_modes,
+    kit_tree,
     layer_manifest,
     load_json,
     manifest_moved,
@@ -48,6 +49,8 @@ from .resources import (
     tracks_modes,
 )
 from .state import Installer, version_tuple
+from .links import installed_links, installed_test
+from .migrate import ENTRY_LINES, unwired
 
 
 SHELL_BUILTINS = frozenset({"cd", "test", "[", "exit", "true", ":", "export", "set", "source", ".", "eval", "exec", "command"})
@@ -96,6 +99,8 @@ def integrity(root: Path, lock: dict) -> list[Finding]:
     for source, number, pattern, path in sorted(records, key=lambda record: record[3]):
         if not pattern.startswith("!") and Path(source).name == ".gitignore" and not Path(source).is_absolute():
             found.append(Finding("error", msg("verify_ignored", path, pattern, source, number)))
+    found += [Finding("error", msg("verify_hidden", path, pattern, source, number))
+              for path, pattern, source, number in hidden(root, lock.get("files", {}))]
     return found
 
 
@@ -437,9 +442,7 @@ def edited(root: Path, kit: dict, catalog: dict, project: dict, lock: dict) -> l
     installer.shell(every, lock, frozenset(kit.get("released", [])))
     changed = {path for path, _ in installer.report}
     index = index_modes(root)
-    found = [Finding("error", msg("verify_tracked_reference", item.path) if item.place == "reference"
-                     else msg("verify_tracked_lock", item.path))
-             for item in every if item.place != "shell" and item.path in index]
+    found = [Finding("error", msg("verify_tracked_lock", item.path)) for item in every if item.place != "shell" and item.path in index]
     for path, item in sorted(planned.items()):
         if item.role == "block":
             pair, target = markers(path, item.block), root / path
@@ -458,11 +461,27 @@ def installed_kit(root: Path) -> tuple[dict, dict]:
     if not lock.get("kit"):
         raise Refusal(msg("verify_no_lock", LOCK))
     kit = load_json(HERE / "kit.json", msg("no_kit", HERE))
-    if build_of(lock["kit"]) != build_of(kit):
-        raise Refusal(msg("verify_other_kit", lock["kit"].get("version"), lock["kit"].get("digest") or "-",
-                          build_of(lock["kit"])[2] or "-", kit.get("version"), kit.get("digest") or "-",
-                          build_of(kit)[2] or "-"))
+    pinned, running = lock["kit"].get("tree", ""), kit_tree(HERE)
+    if lock["kit"].get("version") != kit.get("version") or pinned and running and pinned != running:
+        raise Refusal(msg("verify_other_kit", lock["kit"].get("version"), pinned[:12] or "-", kit.get("version"), running[:12] or "-"))
     return lock, kit
+
+
+def project_files(root: Path, kit: dict, catalog: dict, project: dict, lock: dict) -> list[Finding]:
+    placed = {item.path for item in plan(HERE, kit, catalog, project, root, lock) if item.place == "lock"}
+    tracked = set(filter(None, git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard").split("\0")))
+    installed = installed_test(tracked, placed)
+    found = []
+    for path in sorted(path for path in tracked if path.endswith(".md") and (root / path).is_file()):
+        text = (root / path).read_text(encoding="utf-8", errors="replace")
+        found += [Finding("error", msg("verify_installed_link", path, number, target))
+                  for number, target in installed_links(path, text, installed)]
+    for path in ENTRY_LINES:
+        if path == "CLAUDE.md" and "agents/claude-code" not in enabled(project):
+            continue
+        text = (root / path).read_text(encoding="utf-8", errors="replace") if (root / path).is_file() else ""
+        found += [Finding("error", msg("verify_entry_line", path, line)) for line in unwired(path, text)]
+    return found
 
 
 def verify(args: argparse.Namespace) -> int:
@@ -491,6 +510,7 @@ def verify(args: argparse.Namespace) -> int:
     off = disabled_gates(rules)
     if HARNESS_FILES not in off:
         findings += edited(root, kit, catalog, project, lock)
+    findings += project_files(root, kit, catalog, project, lock)
     absent = frozenset(lock.get("absent", []))
     if not args.no_gates:
         findings += gates(root, off, absent)

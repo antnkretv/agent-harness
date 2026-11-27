@@ -10,7 +10,6 @@ from pathlib import Path, PurePosixPath
 import re
 import runpy
 import shutil
-import subprocess
 import sys
 import tarfile
 import tempfile
@@ -119,6 +118,11 @@ def overlay(kit: Path, target: Path, config: dict) -> None:
     (target / PROJECT).write_text(json_text(config), encoding="utf-8", newline="\n")
 
 
+POLICY_FILES = ("AGENTS.md", "REVIEW.md", "CONTRIBUTING.md", "specs/README.md", "docs/README.md", ".specify/memory/constitution.md",
+                ".harness/AGENTS.md", ".harness/REVIEW.md", ".harness/CONTRIBUTING.md", ".harness/README.md")
+POLICY_PREFIXES = ("docs/platform/", ".harness/docs/", ".agents/skills/")
+
+
 def policy_documents(kit: Path, config: dict, root: Path, base: str) -> dict[str, bytes]:
     sys.dont_write_bytecode = True
     name = "_harness_review_policy_" + sha256(str(kit).encode())[:16]
@@ -127,28 +131,21 @@ def policy_documents(kit: Path, config: dict, root: Path, base: str) -> dict[str
     module = importlib.util.module_from_spec(package)
     sys.modules[name] = module
     package.loader.exec_module(module)
-    renderer, blocks = (importlib.import_module(name + "." + child) for child in ("render", "documents"))
+    renderer, blocks_seed = (importlib.import_module(name + "." + child) for child in ("render", "migrate"))
     metadata = json.loads((kit / "kit.json").read_text(encoding="utf-8"))
     extra = {**renderer.computed(metadata, config), "harness.installDate": git(root, "show", "-s", "--format=%cs", base)}
     existing = set(git(root, "ls-tree", "-r", "--name-only", base).splitlines())
     files = {}
     for path, entry in metadata["files"].items():
-        if not (path in ("AGENTS.md", "REVIEW.md", "CONTRIBUTING.md", ".harness/README.md", "specs/README.md",
-                         "docs/README.md", ".specify/memory/constitution.md")
-                or path.startswith(("docs/platform/", ".agents/skills/"))):
+        if not (path in POLICY_FILES or path.startswith(POLICY_PREFIXES)):
             continue
-        if path in ("docs/README.md", "specs/README.md", ".specify/memory/constitution.md") and path in existing:
+        if entry.get("role") == "seed" and path in existing:
             continue
         content = (kit / "payload" / path).read_bytes()
         if entry.get("render"):
             content = renderer.render(content.decode("utf-8"), config, extra, path).encode("utf-8")
-        if path in ("AGENTS.md", "REVIEW.md", "CONTRIBUTING.md") and path in existing:
-            original = subprocess.run(["git", "-C", str(root), "show", base + ":" + path],
-                                      capture_output=True, check=True).stdout
-            archived = ".review-project-policy/" + path
-            files[archived] = original
-            text = blocks.compose(path, original.decode("utf-8"), content.decode("utf-8"), "core")
-            content = (text.rstrip() + "\n\n" + msg("review_bootstrap_base_policy", archived, archived) + "\n").encode("utf-8")
+        if entry.get("role") == "seed":
+            content = blocks_seed.seeded(path, content.decode("utf-8")).encode("utf-8")
         files[path] = content
     return files
 

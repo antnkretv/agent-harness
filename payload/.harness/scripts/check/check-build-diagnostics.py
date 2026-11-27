@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Валит сборку .NET, после которой в журнале компилятора осталась хоть одна
 диагностика: ошибка, предупреждение или сообщение уровня info. Правило и его
-причина - docs/platform/delivery/ci-cd.md.
+причина - .harness/docs/ci-cd.md.
 
     ./.harness/hooks/python.cmd .harness/scripts/check/check-build-diagnostics.py --configuration <Debug|Release> [--project <csproj>]
 

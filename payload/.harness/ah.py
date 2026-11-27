@@ -3,8 +3,8 @@
     python3 .harness/ah.py install [--archive <архив>]   # Windows: py -3 .harness/ah.py install
     python3 .harness/ah.py upgrade [--version <версия> | --commit <ветка или коммит>]  # ветка, lock и PR
 
-Версии нет в кеше - загрузчик собирает комплект из kit.commit репозитория kit.repository и сверяет его файлы с kit.tree,
-а без kit.commit скачивает архив выпуска и сверяет его sha256 с lock.
+Кеш хранит версию под ее kit.tree. Версии нет в кеше - загрузчик собирает комплект из kit.commit репозитория
+kit.repository, а без kit.commit скачивает архив выпуска; файлы любого источника сверяются с kit.tree.
 """
 
 import hashlib
@@ -19,8 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path(os.environ.get("AGENT_HARNESS_CACHE") or Path.home() / ".cache" / "agent-harness")
-MSG_sha='ah: sha256 архива %s не совпадает с lock.json (%s)'
-MSG_unpinned='ah: в .harness/state/lock.json нет kit.sha256 и kit.tree: комплект ставится командой apply --archive'
+MSG_unpinned='ah: в .harness/state/lock.json нет kit.tree: комплект ставится командой apply --archive'
 MSG_shape='ah: архив %s - не комплект agent-harness: в нем нет одного каталога с ah.py'
 MSG_no_archive='ah: после --archive нужен путь к архиву'
 MSG_built='ah: файлы архива %s не сходятся с kit.tree %s из lock.json'
@@ -41,12 +40,11 @@ def tree_digest(files) -> str:
 
 def genuine(top: Path, tree: str) -> bool:
     return (top / "ah.py").is_file() and tree_digest(
-        (path.relative_to(top).as_posix(), path.read_bytes()) for path in top.rglob("*") if path.is_file()) == tree
+        (path.relative_to(top).as_posix(), path.read_bytes()) for path in top.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts) == tree
 
 
-def unpacked(archive: Path, home: Path, tree: str, sha: str = "") -> Path:
-    if sha and hashlib.sha256(archive.read_bytes()).hexdigest() != sha:
-        sys.exit(msg("sha", archive, sha))
+def unpacked(archive: Path, home: Path, tree: str) -> Path:
     CACHE.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=".unpack-", dir=CACHE))
     try:
@@ -107,10 +105,10 @@ def fetched(repository: str, ref: str) -> Path:
     return work
 
 
-def from_source(source: Path, tree: str, commit: bool = False) -> Path:
-    archive = built(source, commit)
+def from_source(source: Path, tree: str) -> Path:
+    archive = built(source, True)
     try:
-        return unpacked(archive, CACHE / f"src-{tree}", tree)
+        return unpacked(archive, CACHE / tree, tree)
     finally:
         shutil.rmtree(archive.parent, ignore_errors=True)
 
@@ -134,13 +132,38 @@ def downloaded(kit: dict) -> Path:
     return Path(path)
 
 
+def place(kit: dict, archive: "Path | None", home: Path, tree: str) -> None:
+    if archive is not None:
+        unpacked(archive, home, tree)
+    elif kit.get("commit") and kit.get("repository"):
+        try:
+            source = fetched(kit["repository"], kit["commit"])
+        except OSError as error:
+            sys.exit(msg("fetch", kit["commit"][:12], kit["repository"], error))
+        try:
+            from_source(source, tree)
+        finally:
+            shutil.rmtree(source, ignore_errors=True)
+    elif kit.get("repository"):
+        try:
+            downloaded_archive = downloaded(kit)
+        except OSError as error:
+            sys.exit(msg("download", release(kit), error))
+        try:
+            unpacked(downloaded_archive, home, tree)
+        finally:
+            downloaded_archive.unlink(missing_ok=True)
+    else:
+        sys.exit(msg("uncached", tree[:12], CACHE))
+
+
 def main(args: list[str]) -> int:
     if not args or args[0] in ("-h", "--help"):
         print(__doc__)
         return 0
     kit = json.loads((ROOT / ".harness/state/lock.json").read_text(encoding="utf-8"))["kit"]
-    sha, tree = kit.get("sha256"), kit.get("tree")
-    if not sha or not tree:
+    tree = kit.get("tree")
+    if not tree:
         sys.exit(msg("unpinned"))
     archive = None
     if "--archive" in args:
@@ -149,31 +172,9 @@ def main(args: list[str]) -> int:
             sys.exit(msg("no_archive"))
         archive = Path(args[at + 1])
         del args[at:at + 2]
-    home = next((home for home in (CACHE / sha, CACHE / f"src-{tree}") if genuine(home, tree)), None)
-    if home is None and archive is not None:
-        home = unpacked(archive, CACHE / sha, tree, sha)
-    elif home is None and kit.get("source"):
-        home = from_source(ROOT / kit["source"], tree)
-    elif home is None and kit.get("commit") and kit.get("repository"):
-        try:
-            source = fetched(kit["repository"], kit["commit"])
-        except OSError as error:
-            sys.exit(msg("fetch", kit["commit"][:12], kit["repository"], error))
-        try:
-            home = from_source(source, tree, True)
-        finally:
-            shutil.rmtree(source, ignore_errors=True)
-    elif home is None and kit.get("repository"):
-        try:
-            archive = downloaded(kit)
-        except OSError as error:
-            sys.exit(msg("download", release(kit), error))
-        try:
-            home = unpacked(archive, CACHE / sha, tree, sha)
-        finally:
-            archive.unlink(missing_ok=True)
-    elif home is None:
-        sys.exit(msg("uncached", sha[:12], CACHE))
+    home = CACHE / tree
+    if not genuine(home, tree):
+        place(kit, archive, home, tree)
     link = ROOT / ".harness" / "kit"
     if os.path.realpath(link) != os.path.realpath(home) and os.name == "nt":
         if link.is_symlink() or link.is_file():

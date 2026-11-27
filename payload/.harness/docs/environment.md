@@ -3,18 +3,18 @@
 > **Тип (Diataxis):** Справочник
 
 Документ описывает, как облачная сессия агента и раннер CI получают тулчейн проекта. Набор шагов
-задает манифест [`.harness/project/manifest.json`](../../../.harness/project/manifest.json): решение .NET
+задает манифест [`.harness/project/manifest.json`](../project/manifest.json): решение .NET
 `backend/dotnet.solution` и `.node-version` в корне, а установщики инструментов приходят с модулями,
 которым инструмент нужен. Версии инструментов живут в машинных источниках, установщики -
 официальные.
 
 ## Python
 
-Выбор интерпретатора задает [python.sh](../../../.harness/lib/python.sh). В Bash вызывают
+Выбор интерпретатора задает [python.sh](../lib/python.sh). В Bash вызывают
 `harness_python` после подключения библиотеки, из CI, хуков и терминала -
-[python.cmd](../../../.harness/hooks/python.cmd). Адаптер использует ту же библиотеку в Bash,
+[python.cmd](../hooks/python.cmd). Адаптер использует ту же библиотеку в Bash,
 а в Windows CMD передает аргументы выбранному интерпретатору. Из PowerShell вызывают
-[python.ps1](../../../.harness/hooks/python.ps1): он сохраняет аргументы при передаче тому же
+[python.ps1](../hooks/python.ps1): он сохраняет аргументы при передаче тому же
 launcher, включая кавычки, пустые строки и кириллицу, и возвращает код завершения Python.
 
 `HARNESS_PYTHON` задает явный путь к интерпретатору, например Python виртуального окружения.
@@ -32,8 +32,8 @@ Linux и macOS - `python3`. Заглушка WindowsApps берется, тол�
 
 | Фаза | Скрипт | Когда идет | Что делает |
 | --- | --- | --- | --- |
-| снапшот окружения | [`cloud-setup.sh`](../../../.harness/provisioning/scripts/cloud-setup.sh) | один раз при сборке окружения облачного агента, после `install` комплекта по lock | Vale, shellcheck; .NET SDK и PowerShell при решении .NET; Node и npm при `.node-version`; языковые серверы стеков `dotnet` и `node`; затем шаги проекта `setup.snapshot` манифеста и плагин `docker mcp` модуля `mcp/docker`, когда `docker` стоит: шаг проекта ставит Docker раньше плагина |
-| старт сессии | [`session-start.sh`](../../../.harness/hooks/session-start.sh) | каждый старт сессии: [ссылки агентов](#ссылки-агентов) и уборка задач в фоне; остальное - только удаленной | тулчейн по манифесту, окружение сессии с расширением `agents.envScript`, языковые серверы стеков, зависимости репозитория и `core.hooksPath`, затем шаги проекта `setup.session` манифеста |
+| снапшот окружения | [`cloud-setup.sh`](../provisioning/scripts/cloud-setup.sh) | один раз при сборке окружения облачного агента, после `install` комплекта по lock | Vale, shellcheck; .NET SDK и PowerShell при решении .NET; Node и npm при `.node-version`; языковые серверы стеков `dotnet` и `node`; затем шаги проекта `setup.snapshot` манифеста и плагин `docker mcp` модуля `mcp/docker`, когда `docker` стоит: шаг проекта ставит Docker раньше плагина |
+| старт сессии | [`session-start.sh`](../hooks/session-start.sh) | каждый старт сессии: [ссылки агентов](#ссылки-агентов) и уборка задач в фоне; остальное - только удаленной | тулчейн по манифесту, окружение сессии с расширением `agents.envScript`, языковые серверы стеков, зависимости репозитория и `core.hooksPath`, затем шаги проекта `setup.session` манифеста |
 
 `session-start.sh` пишет вывод шагов в журнал `.git/harness/session-start.log`, а в сессию отдает
 одну строку итога; отказ шага подготовки или шага проекта он называет вместе с последними строками
@@ -62,7 +62,7 @@ Cursor (`start` в `.cursor/environment.json` зовет `.cursor/start.sh --ste
 
 Команды агента удаленной сессии идут в неинтерактивной оболочке, которая файлы старта Bash не
 читает. Поэтому хук старта дописывает то же окружение в файл окружения сессии `AGENT_ENV_FILE`:
-тот же [`session-env.sh --export`](../../../.harness/provisioning/scripts/session-env.sh) печатает общий
+тот же [`session-env.sh --export`](../provisioning/scripts/session-env.sh) печатает общий
 тулчейн и расширение проекта. Отказ расширения хук называет, в сессии остается общий тулчейн.
 Серверы MCP с командой получают это окружение при [запуске](harness-parameters.md#mcp).
 
@@ -70,7 +70,7 @@ Cursor (`start` в `.cursor/environment.json` зовет `.cursor/start.sh --ste
 
 Скиллы и правила агентов по путям лежат одним оригиналом в `.agents/skills/` и `.agents/rules/`.
 Ссылки на них - `.claude/skills`, `.claude/rules/harness-<имя>.md` и `.cursor/rules/harness-<имя>.mdc` -
-создает [`agent_links.py`](../../../.harness/lib/agent_links.py): ссылку, которая ведет не туда, он
+создает [`agent_links.py`](../lib/agent_links.py): ссылку, которая ведет не туда, он
 заменяет, ссылку на исчезнувшее правило снимает. На Windows, если символическую ссылку создать
 нельзя, он ставит junction для каталога и жесткую ссылку для файла. В git ссылки не попадают: в
 свежем клоне они появляются на первом старте сессии, и если агент прочитал правила раньше хука, правила
@@ -92,11 +92,11 @@ Cursor (`start` в `.cursor/environment.json` зовет `.cursor/start.sh --ste
 
 | Агент | Снапшот | Старт сессии |
 | --- | --- | --- |
-| Claude Code (web), `agents/claude-code` | поле setup script окружения на claude.ai/code: [сниппет](#setup-script-облачного-окружения) | хук `SessionStart` в [`.claude/settings.json`](../../../.claude/settings.json) зовет [`.claude/hooks/session-start.sh`](../../../.claude/hooks/session-start.sh) |
-| Cursor Cloud, `agents/cursor` | `install` в [`.cursor/environment.json`](../../../.cursor/environment.json) | `start` - [`.cursor/start.sh`](../../../.cursor/start.sh); хук `sessionStart` в [`.cursor/hooks.json`](../../../.cursor/hooks.json) зовет тот же адаптер, что Codex; [ссылки агентов](#ссылки-агентов) создают также хук `workspaceOpen` и `start.sh` |
-| Codex, `agents/codex` | поле setup script облачного окружения Codex: тот же [сниппет](#setup-script-облачного-окружения) | [`.codex/hooks/session-start.py`](../../../.codex/hooks/session-start.py) |
+| Claude Code (web), `agents/claude-code` | поле setup script окружения на claude.ai/code: [сниппет](#setup-script-облачного-окружения) | хук `SessionStart` в [`.claude/settings.json`](../../.claude/settings.json) зовет [`.claude/hooks/session-start.sh`](../../.claude/hooks/session-start.sh) |
+| Cursor Cloud, `agents/cursor` | `install` в [`.cursor/environment.json`](../../.cursor/environment.json) | `start` - [`.cursor/start.sh`](../../.cursor/start.sh); хук `sessionStart` в [`.cursor/hooks.json`](../../.cursor/hooks.json) зовет тот же адаптер, что Codex; [ссылки агентов](#ссылки-агентов) создают также хук `workspaceOpen` и `start.sh` |
+| Codex, `agents/codex` | поле setup script облачного окружения Codex: тот же [сниппет](#setup-script-облачного-окружения) | [`.codex/hooks/session-start.py`](../../.codex/hooks/session-start.py) |
 
-Codex исполняет хуки проекта, в том числе [сессии конвейера](../../../.harness/README.md#сессия-конвейера),
+Codex исполняет хуки проекта, в том числе [сессии конвейера](../README.md#сессия-конвейера),
 только из доверенного слоя `.codex/` и после одобрения их определения командой `/hooks`.
 
 Адаптер агента переводит его переменные в общие: `AGENT_PROJECT_DIR`, `AGENT_REMOTE` (удаленная
@@ -140,7 +140,7 @@ exit 0
 
 | | Setup script окружения | Хук `SessionStart` |
 | --- | --- | --- |
-| Где настроен | диалог окружения на claude.ai/code | [`.claude/settings.json`](../../../.claude/settings.json) репозитория |
+| Где настроен | диалог окружения на claude.ai/code | [`.claude/settings.json`](../../.claude/settings.json) репозитория |
 | Когда идет | до запуска Claude Code, только при промахе кеша окружения | после запуска Claude Code, на каждой сессии, включая resume |
 | Где идет | только облачные сессии | облачные и локальные сессии |
 | Ненулевой код | создание сессии отказывает | сессия стартует, ошибка видна в stderr |
@@ -159,7 +159,7 @@ shellcheck, gitleaks, PowerShell, плагин `docker mcp`), `nodejs.org` (Node
 
 ## Установщики
 
-Каталог [`.harness/provisioning/scripts/`](../../../.harness/provisioning/scripts/cloud-setup.sh):
+Каталог [`.harness/provisioning/scripts/`](../provisioning/scripts/cloud-setup.sh):
 
 | Скрипт | Путь | Что ставит | Источник версии |
 | --- | --- | --- | --- |
@@ -193,7 +193,7 @@ shellcheck, gitleaks, PowerShell, плагин `docker mcp`), `nodejs.org` (Node
 ## Источники версий
 
 Версия живет в одном машинном источнике своего стека. Машинные контракты и версии в документации
-сверяет гейт `tool-pins` ([`check-tool-pins.py`](../../../.harness/scripts/check/check-tool-pins.py)).
+сверяет гейт `tool-pins` ([`check-tool-pins.py`](../scripts/check/check-tool-pins.py)).
 Проверка версий в Markdown пропускает `docs.historicalPrefixes`: это граница охвата гейта, а не
 разрешение копировать версии в датированные снимки. Соблюдение текстового правила в этих снимках
 проверяет ревью. ADR гейт проверяет как живой документ.

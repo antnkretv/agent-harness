@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Валит дерево, в котором файл C# расходится с выводом CSharpier. Правило и его причина -
-docs/platform/delivery/ci-cd.md, раздел "Форматирование C#".
+.harness/docs/ci-cd.md, раздел "Форматирование C#".
 
     ./.harness/hooks/python.cmd .harness/scripts/check/check-dotnet-format.py
 """

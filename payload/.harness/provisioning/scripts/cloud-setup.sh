@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Setup script окружения облачного агента: ставит toolchain в снапшот окружения.
 # Набор шагов задает манифест .harness/project/manifest.json; разделение с SessionStart-хуком
-# и сниппет для поля в UI - справочник docs/platform/agents/environment.md в репозитории комплекта.
+# и сниппет для поля в UI - справочник .harness/docs/environment.md в репозитории комплекта.
 set -uo pipefail
 
 HARNESS_SAY_PREFIX="web-setup: "
