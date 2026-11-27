@@ -47,6 +47,16 @@ def titled(label: str, note: str) -> list[tuple[str, str]]:
     return [("", label), *([("class:instruction", f"  {note}")] if note else [])]
 
 
+def validator(question: Question):
+    def check(value) -> bool | str:
+        try:
+            question.parse(value)
+        except ValueError as error:
+            return str(error)
+        return True
+    return check if question.parse else None
+
+
 def asked(library, question: Question):
     if question.why:
         print(msg("prompt_why", question.why))
@@ -67,8 +77,9 @@ def asked(library, question: Question):
         chosen = set(question.default) if isinstance(question.default, list) else {question.default}
         choices = [library.Choice(titled(entry["label"], entry["description"]), value=entry["value"],
                                   checked=entry["value"] in chosen) for entry in question.options]
-        return library.checkbox(question.text, choices=choices).unsafe_ask()
-    return library.text(question.text, default=value_text(question.default)).unsafe_ask()
+        return library.checkbox(question.text, choices=choices, validate=validator(question) or (lambda _: True)).unsafe_ask()
+    return library.text(question.text, default=value_text(question.default),
+                        validate=validator(question) or (lambda _: True)).unsafe_ask()
 
 
 def automatic(question: Question):

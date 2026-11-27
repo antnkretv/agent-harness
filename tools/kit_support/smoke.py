@@ -44,7 +44,7 @@ from .source import leak_rules, leaks
 
 INSTALLER_PATHS = (".harness/state/harness.py", ".harness/state/installer", ".harness/state/kit.json",
                    ".harness/state/messages.env", *(f"{folder}/skills/{name}" for folder in (".agents", ".claude", ".cursor", ".codex")
-                                                        for name in ("harness-init", "harness-sync", "harness-configure")))
+                                                        for name in ("harness-init", "harness-sync")))
 
 # Сценарии ставят комплект от имени человека: признаки агентской сессии, в которой идет проверка, в фикстуры не переносятся.
 AGENT_ENV = {pair.partition("=")[0] for pair in
@@ -80,6 +80,31 @@ except Refusal as error:
     print(error, file=sys.stderr)
     sys.exit(2)
 sys.exit(1)
+"""
+
+PROMPTER = """
+import json, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from installer import prompt
+prompt.questionary()
+from prompt_toolkit.application import create_app_session
+from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.output import DummyOutput
+keys, asked, shown = json.loads(sys.argv[3]), [], prompt.asked
+
+
+def scripted(library, question):
+    asked.append(question.id)
+    with create_pipe_input() as pipe:
+        pipe.send_text(keys.get(question.id, "\\r"))
+        with create_app_session(input=pipe, output=DummyOutput()):
+            return shown(library, question)
+
+
+prompt.terminal, prompt.asked = (lambda: True), scripted
+problems = prompt.answered(Path(sys.argv[2]))
+print(json.dumps({"asked": asked, "problems": problems}))
 """
 
 
@@ -814,6 +839,23 @@ class Smoke:
         if self.expect(msg("smoke_init_again"), command):
             self.check(msg("smoke_init_idempotent"), self.clean())
 
+    def prompted(self) -> None:
+        """Вопросы в терминале: questionary ставится в кеш, выбор, отметки и сводный вопрос дают ответы владельца."""
+        self.bootstrap()
+        last = "\x1b[A \r"
+        keys = {"modules.agents": " \r", "modules.backend": last, "modules.frontend": last, "defaults": " \r"}
+        done = run([sys.executable, "-B", "-c", PROMPTER, str(self.kit), str(self.repo), json.dumps(keys)], self.repo)
+        found = json.loads(done.stdout.strip().splitlines()[-1]) if done.returncode == 0 and done.stdout.strip() else {}
+        if not found:
+            print(done.stdout + done.stderr, flush=True)
+        stored = self.read_json(ANSWERS)["answers"] if (self.repo / ANSWERS).is_file() else {}
+        asked = found.get("asked", [])
+        dropped = asked[asked.index("defaults") + 1] if "defaults" in asked[:-1] else ""
+        self.check(msg("smoke_prompt"), bool(found) and not found["problems"] and (self.repo / PROJECT).is_file()
+                   and stored.get("modules.agents") == {"value": ["claude-code"], "by": "owner"}
+                   and stored.get("shape", {}).get("by") == "owner")
+        self.check(msg("smoke_prompt_summary"), bool(dropped) and dropped in stored and stored[dropped]["by"] == "owner")
+
     def scripted(self) -> None:
         """install.sh выпуска: скачивает архив версии, сверяет sha256 и ставит проект через ah init."""
         self.bootstrap()
@@ -965,6 +1007,8 @@ def smoke(kit_folder: Path, adapters: list[str], kit: dict) -> list[str]:
         initialized.initialized()
         script = Smoke(kit_folder, [], root / "script")
         script.scripted()
+        terminal = Smoke(kit_folder, [], root / "prompt")
+        terminal.prompted()
         pinned = Smoke(kit_folder, [], root / "commit")
         pinned.committed()
         bare = Smoke(kit_folder, [], root / "no-ci")
