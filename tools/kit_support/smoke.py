@@ -900,6 +900,16 @@ class Smoke:
         self.commit("chore: harness")
         if self.expect(msg("smoke_init_again"), command):
             self.check(msg("smoke_init_idempotent"), self.clean())
+        self.seed({"modules.githooks": "commit-msg"})
+        change = self.installer() + ["change", "--target", str(self.repo)]
+        kept = self.expect(msg("smoke_change_unattended"), change) and self.expect(msg("smoke_change_unattended"), change)
+        self.check(msg("smoke_change_owner"), kept and self.owner_kept())
+
+    def owner_kept(self) -> bool:
+        """Решение владельца не по значению каталога остается его ответом и попадает в манифест."""
+        stored = self.read_json(ANSWERS)["answers"]
+        manifest = self.read_json(PROJECT)["modules"]["githooks"]["extensions"]
+        return stored.get("modules.githooks") == {"value": ["commit-msg"], "by": "owner"} and list(manifest) == ["commit-msg"]
 
     def prompted(self) -> None:
         """Вопросы в терминале: questionary ставится в кеш, выбор, отметки и сводный вопрос дают ответы владельца."""
@@ -914,11 +924,13 @@ class Smoke:
                    and stored.get("modules.agents") == {"value": ["claude-code"], "by": "owner"}
                    and stored.get("shape", {}).get("by") == "owner")
         self.check(msg("smoke_prompt_summary"), bool(dropped) and dropped in stored and stored[dropped]["by"] == "owner")
+        self.seed({"modules.githooks": "commit-msg"})
+        self.prompter({}, "init")
         manifest = self.read(PROJECT) if (self.repo / PROJECT).is_file() else ""
         changed = self.prompter({}, "change")
         separate = set(changed.get("items", [])) & set(changed.get("asked", []))
         self.check(msg("smoke_prompt_change"), bool(changed) and {"stack", "defaults"} <= set(changed["asked"])
-                   and not separate and self.read(PROJECT) == manifest)
+                   and not separate and self.read(PROJECT) == manifest and self.owner_kept())
 
     def prompter(self, keys: dict, command: str) -> dict:
         done = run([sys.executable, "-B", "-c", PROMPTER, str(self.kit), str(self.repo), json.dumps(keys), command], self.repo)

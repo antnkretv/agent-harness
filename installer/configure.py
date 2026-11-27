@@ -571,8 +571,8 @@ def owner_question(catalog: dict, tree: Tree, answers: dict, incoming: set, reop
                 reopened[item.id] = removed(item, value)
                 alone.add(item.id)
             else:
-                proposed = value if item.proposed is None else item.proposed
-                answers[item.id] = {"value": value, "by": "default" if item.catalog and value == proposed else "owner"}
+                listed = item.catalog_value is not None and value == item.catalog_value
+                answers[item.id] = {"value": value, "by": "default" if listed else "owner"}
 
 
 def migrate(answers: dict, reopened: dict, catalog: dict, alone: set) -> None:
@@ -637,6 +637,12 @@ def settle(root: Path, given: dict | None = None, change: bool = False, strict: 
             answers[key] = {"value": value, "by": PACKED}
     if change:
         reopen_all(answers, reopened)
+        alone.clear()
+    if defaults:
+        for key in list(reopened):
+            value = reopened.pop(key)
+            if key not in alone:
+                answers.setdefault(key, {"value": value, "by": "owner"})
         alone.clear()
     summaries = {key: given.pop(key) for key in SUMMARIES if key in given}
     for key, value in given.items():

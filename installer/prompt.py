@@ -89,10 +89,10 @@ def asked(library, question: Question):
                         validate=validator(question) or (lambda _: True)).unsafe_ask()
 
 
-def unattended(root: Path, change: bool) -> list[str]:
+def unattended(root: Path) -> list[str]:
     if git_bash():
         print(msg("prompt_git_bash"), file=sys.stderr)
-    pending, problems, found = settle(root, {}, change, strict=True, defaults=True)
+    pending, problems, found = settle(root, strict=True, defaults=True)
     for item in found:
         print(msg("prompt_found", item["id"], value_text(item["value"]), item.get("why") or "-"))
     if pending is not None:
@@ -102,7 +102,7 @@ def unattended(root: Path, change: bool) -> list[str]:
 
 def answered(root: Path, change: bool = False) -> list[str]:
     if not terminal():
-        return unattended(root, change)
+        return unattended(root)
     library = questionary()
     given, first = {}, True
     while True:
