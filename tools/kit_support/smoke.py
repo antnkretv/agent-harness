@@ -1026,6 +1026,6 @@ def smoke(kit_folder: Path, adapters: list[str], kit: dict) -> list[str]:
         for shape, adapter, absent in (("backend", "dotnet", NODE_FILES), ("frontend", "node", DOTNET_FILES))[:2 * bool(adapters)]:
             sides.append(Smoke(kit_folder, [adapter], root / shape))
             sides[-1].sided(shape, absent)
-        return [problem for each in (scenario, locked, initialized, pinned, bare, roles, steps, packed, hosted, *sides) for problem in each.problems]
+        return [problem for each in (scenario, locked, initialized, script, terminal, pinned, bare, roles, steps, packed, hosted, *sides) for problem in each.problems]
 
 
