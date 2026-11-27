@@ -3,13 +3,13 @@
   "hooks": {
     "workspaceOpen": [
       {
-        "command": "./.harness/hooks/python.cmd .harness/ah.py hook session-start cursor",
+        "command": "./.harness/hooks/python.cmd .harness/ah.py hook --fetch session-start cursor",
         "timeout": 900
       }
     ],
     "sessionStart": [
       {
-        "command": "./.harness/hooks/python.cmd .harness/ah.py hook session-start cursor",
+        "command": "./.harness/hooks/python.cmd .harness/ah.py hook --fetch session-start cursor",
         "timeout": 900
       }
     ],

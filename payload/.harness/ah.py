@@ -2,7 +2,7 @@
 
     python3 .harness/ah.py install [--archive <архив>]   # Windows: py -3 .harness/ah.py install
     python3 .harness/ah.py upgrade [--version <версия> | --commit <ветка или коммит>]  # ветка, lock и PR
-    .harness/hooks/python.cmd .harness/ah.py hook <хук> [аргументы]  # хук агента: слой версии lock, затем .harness/hooks/<хук>
+    .harness/hooks/python.cmd .harness/ah.py hook [--fetch] <хук> [аргументы]  # хук агента: слой версии lock, затем .harness/hooks/<хук>
 
 Кеш хранит версию под ее kit.tree. Версии нет в кеше - загрузчик собирает комплект из kit.commit репозитория
 kit.repository, а без kit.commit скачивает архив выпуска; файлы любого источника сверяются с kit.tree.
@@ -29,6 +29,7 @@ MSG_unbuilt='ah: kit.py build в исходнике %s не собрал арх�
 MSG_uncached='ah: версии %s нет в кеше %s или ее файлы там изменены: передайте архив флагом --archive'
 MSG_download='ah: архив выпуска %s не скачан: %s. Передайте архив флагом --archive'
 MSG_fetch='ah: коммит %s комплекта не получен из %s: %s. Передайте архив флагом --archive'
+MSG_offline='версии %s нет в кеше %s, а этот хук сеть не использует'
 MSG_hook_usage='ah: после hook нужно имя хука из .harness/hooks'
 MSG_hook_unknown='в .harness/hooks нет хука %s'
 MSG_hook_refused='выполните python3 .harness/ah.py install: %s'
@@ -155,9 +156,11 @@ def downloaded(kit: dict) -> Path:
     return Path(path)
 
 
-def place(kit: dict, archive: "Path | None", home: Path, tree: str) -> None:
+def place(kit: dict, archive: "Path | None", home: Path, tree: str, network: bool = True) -> None:
     import shutil
 
+    if archive is None and not network:
+        sys.exit(msg("offline", tree[:12], CACHE))
     if archive is not None:
         unpacked(archive, home, tree)
     elif kit.get("commit") and kit.get("repository"):
@@ -189,12 +192,12 @@ def pinned() -> dict:
     return kit
 
 
-def prepared(archive: "Path | None") -> Path:
+def prepared(archive: "Path | None", network: bool = True) -> Path:
     kit = pinned()
     tree = kit["tree"]
     home = CACHE / tree
     if not genuine(home, tree):
-        place(kit, archive, home, tree)
+        place(kit, archive, home, tree, network)
     link = ROOT / ".harness" / "kit"
     if os.path.realpath(link) != os.path.realpath(home) and os.name == "nt":
         if link.is_symlink() or link.is_file():
@@ -230,9 +233,9 @@ def hook_script(name: str) -> "Path | None":
     return next((HOOKS / (name + suffix) for suffix in (".py", ".sh", ".ps1") if (HOOKS / (name + suffix)).is_file()), None)
 
 
-def installed() -> str:
+def installed(network: bool) -> str:
     try:
-        done = utility(prepared(None), ["install"], stdout=sys.stderr, stderr=subprocess.PIPE, text=True)
+        done = utility(prepared(None, network), ["install"], stdout=sys.stderr, stderr=subprocess.PIPE, text=True)
     except SystemExit as stop:
         return str(stop.code)
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
@@ -248,16 +251,18 @@ def refused(reason: str, rest: list[str]) -> int:
 
 
 def hook(args: list[str]) -> int:
+    network = args[:1] == ["--fetch"]
+    args = args[network:]
     if not args or not args[0].replace("-", "").isalnum():
         sys.exit(msg("hook_usage"))
     name, rest = args[0], args[1:]
     script = hook_script(name)
     try:
-        current = script is not None and placed_tree() == pinned()["tree"]
-    except (OSError, ValueError, KeyError, SystemExit):
-        current = False
-    if not current:
-        reason = installed()
+        tree = json.loads((ROOT / ".harness/state/lock.json").read_text(encoding="utf-8"))["kit"].get("tree")
+    except (OSError, ValueError, KeyError):
+        tree = None
+    if script is None or tree and placed_tree() != tree:
+        reason = installed(network)
         script = hook_script(name)
         if reason or script is None:
             return refused(reason or msg("hook_unknown", name), rest)

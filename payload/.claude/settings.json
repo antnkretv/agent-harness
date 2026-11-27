@@ -14,7 +14,7 @@
 				"matcher": "startup|resume",
 				"hooks": [
 					{
-						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/ah.py\" hook session-start claude",
+						"command": "\"$CLAUDE_PROJECT_DIR/.harness/hooks/python.cmd\" \"$CLAUDE_PROJECT_DIR/.harness/ah.py\" hook --fetch session-start claude",
 						"statusMessage": "Настройка окружения (toolchain из манифеста проекта)...",
 						"timeout": 900,
 						"type": "command"

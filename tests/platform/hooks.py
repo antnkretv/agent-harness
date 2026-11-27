@@ -81,7 +81,7 @@ def check_configs() -> None:
         # Хук текстов ставит модуль forge: без поставщика кода проверять нечего.
         if (ROOT / SHARED_LINT).exists():
             expect_hook(codex_hooks.get("preToolUse", []), PLAIN_HOOK + "forge-text-lint cursor", "Cursor preToolUse")
-        expect_hook(codex_hooks.get("sessionStart", []), PLAIN_HOOK + "session-start cursor", "Cursor sessionStart")
+        expect_hook(codex_hooks.get("sessionStart", []), PLAIN_HOOK + "--fetch session-start cursor", "Cursor sessionStart")
         expect_hook(codex_hooks.get("preToolUse", []), PLAIN_HOOK + "agent-deny cursor", "Cursor preToolUse")
         for event in ("beforeSubmitPrompt", "preToolUse", "stop"):
             expect_hook(codex_hooks.get(event, []), PLAIN_HOOK + "agent-gate cursor", "Cursor " + event)
@@ -89,13 +89,13 @@ def check_configs() -> None:
     if (ROOT / ".codex" / "hooks.json").is_file():
         native = read_json(ROOT / ".codex" / "hooks.json").get("hooks", {})
         for event in ("UserPromptSubmit", "PreToolUse", "Stop"):
-            expect_hook(flatten(native.get(event, [])), PLAIN_HOOK + "agent-gate codex", "Codex " + event)
+            expect_hook(flatten(native.get(event, [])), "agent-gate codex", "Codex " + event)
 
     if (ROOT / ".claude").is_dir():
         claude_hooks = read_json(ROOT / ".claude" / "settings.json").get("hooks", {})
         if (ROOT / SHARED_LINT).exists():
             expect_hook(flatten(claude_hooks.get("PreToolUse", [])), CLAUDE_HOOK + "forge-text-lint claude", "Claude PreToolUse")
-        expect_hook(flatten(claude_hooks.get("SessionStart", [])), CLAUDE_HOOK + "session-start claude", "Claude SessionStart")
+        expect_hook(flatten(claude_hooks.get("SessionStart", [])), CLAUDE_HOOK + "--fetch session-start claude", "Claude SessionStart")
         for event in ("UserPromptSubmit", "PreToolUse", "Stop"):
             expect_hook(flatten(claude_hooks.get(event, [])), CLAUDE_HOOK + "agent-gate claude", "Claude " + event)
         # Хук ESLint подключает адаптер node вместе с его конфигами: без них проверять файлу нечем.

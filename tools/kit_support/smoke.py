@@ -725,6 +725,12 @@ class Smoke:
                 done = run(self.agent_hook(agent, root), root)
                 self.check(msg("smoke_hook_installs", agent, root.name), bare and done.returncode == 0
                            and (root / HOOKED).is_file() and not run(["git", "status", "--porcelain"], root).stdout.strip())
+        clone = self.work / "clone-claude"
+        lock = json.loads((clone / LOCK).read_text(encoding="utf-8"))
+        lock["kit"].pop("tree")
+        (clone / LOCK).write_text(json_text(lock), encoding="utf-8", newline="\n")
+        self.check(msg("smoke_hook_unpinned"), run(self.agent_hook("claude", clone), clone).returncode == 0)
+        run(["git", "checkout", "-q", "--", LOCK], clone)
         newer = variant(self.kit, self.work, following(self.kit), lambda text: text + "\nsmoke-kit-line\n")
         self.expect(msg("smoke_apply"), self.apply(newer))
         self.commit("chore: harness newer")
@@ -756,6 +762,13 @@ class Smoke:
         exclude = git_file(self.repo, "info/exclude")
         run([sys.executable, str(self.repo / LOADER), "install"], self.repo)
         pruned = not any(f"worktrees/{name}" in exclude.read_text(encoding="utf-8") for name in ("tree-gone", "tree-codex"))
+        away = self.work / "tree-cursor-away"
+        run(["git", "worktree", "lock", str(trees[2])], self.repo)
+        trees[2].rename(away)
+        run([sys.executable, str(self.repo / LOADER), "install"], self.repo)
+        kept = "worktrees/tree-cursor" in exclude.read_text(encoding="utf-8")
+        away.rename(trees[2])
+        run(["git", "worktree", "unlock", str(trees[2])], self.repo)
         passed = True
         for _ in range(3):
             exclude.write_text("", encoding="utf-8")
@@ -763,6 +776,7 @@ class Smoke:
                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) for tree in trees * 2]
             passed &= all(process.wait() == 0 for process in started)
         text = exclude.read_text(encoding="utf-8")
+        self.check(msg("smoke_exclude_locked"), kept)
         self.check(msg("smoke_exclude_parallel"), pruned and passed and text.count("# harness:begin ") == len(trees)
                    and not exclude.with_name("exclude.lock").exists()
                    and all(not run(["git", "status", "--porcelain"], tree).stdout.strip() for tree in trees))

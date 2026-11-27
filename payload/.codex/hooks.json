@@ -5,8 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "./.harness/hooks/python.cmd .harness/ah.py hook agent-gate codex prompt",
-            "timeout": 60
+            "command": "./.harness/hooks/python.cmd .harness/ah.py hook --fetch agent-gate codex prompt",
+            "timeout": 900
           }
         ]
       }

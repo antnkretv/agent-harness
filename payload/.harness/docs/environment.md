@@ -93,7 +93,7 @@ Cursor (`start` в `.cursor/environment.json` зовет `.cursor/start.sh --ste
 | --- | --- | --- |
 | Claude Code (web), `agents/claude-code` | поле setup script окружения на claude.ai/code: [сниппет](#setup-script-облачного-окружения) | хук `SessionStart` в [`.claude/settings.json`](../../.claude/settings.json) |
 | Cursor Cloud, `agents/cursor` | `install` в [`.cursor/environment.json`](../../.cursor/environment.json) | `start` - [`.cursor/start.sh`](../../.cursor/start.sh); хуки `sessionStart` и `workspaceOpen` в [`.cursor/hooks.json`](../../.cursor/hooks.json) |
-| Codex, `agents/codex` | поле setup script облачного окружения Codex: тот же [сниппет](#setup-script-облачного-окружения) | хука старта сессии нет: слой ставит первый хук [`.codex/hooks.json`](../../.codex/hooks.json) |
+| Codex, `agents/codex` | поле setup script облачного окружения Codex: тот же [сниппет](#setup-script-облачного-окружения) | хука старта сессии нет: слой ставит хук промпта в [`.codex/hooks.json`](../../.codex/hooks.json) |
 
 Каждый хук агента зовет `.harness/hooks/python.cmd .harness/ah.py hook <хук>`: загрузчик ставит слой
 версии lock, если его нет или он устарел, и запускает установленный хук
@@ -136,8 +136,9 @@ exit 0
 В окружении облачного агента должен быть один репозиторий проекта: с несколькими репозиториями агент
 стартует в общем каталоге над клонами, не видит хуков старта и навыков проекта, и комплект не ставится.
 
-Не найденный checkout или неудачная установка не роняют окружение: комплект и тулчейн ставит хук
-старта сессии. Шаг `install` Cursor Cloud в `.cursor/environment.json` тоже сначала ставит комплект, но его отказ
+Не найденный checkout или неудачная установка не роняют окружение: у Claude Code и Cursor комплект и
+тулчейн ставит хук старта сессии. У Codex хука старта нет: слой поставит первый промпт, а тулчейн,
+зависимости и шаги `setup.session` после сбоя setup script не ставит никто, и окружение нужно пересобрать. Шаг `install` Cursor Cloud в `.cursor/environment.json` тоже сначала ставит комплект, но его отказ
 останавливает этот шаг: `cloud-setup.sh` без комплекта не запускается.
 
 ### Setup script и хук старта в Claude Code web
