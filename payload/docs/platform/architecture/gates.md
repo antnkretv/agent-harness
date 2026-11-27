@@ -162,7 +162,7 @@ export default defineConfig(
 
 - `entries.architecture` - точка входа гейта, который держит границы приложения: тест импортов
   (`import-linter` у Python, `go-arch-lint` или `depguard` у Go, ArchUnit у JVM) или свой скрипт.
-  план `check-all.py` зовет ее после `check` приложения, если она не входит в `check` звеном; установщик
+  План `check-all.py` зовет ее после `check` приложения, если она не входит в `check` звеном; установщик
   проверяет рабочий каталог и первую программу команды
   (точки входа: `.harness/docs/harness-parameters.md`).
 - `architectureWaiver` - причина, по которой гейта пока нет.
