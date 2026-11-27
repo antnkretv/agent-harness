@@ -28,5 +28,7 @@ BACKEND_DECISIONS = {"shape": "backend", "modules.backend": ["dotnet"], "modules
 IDENTITY = {"GIT_AUTHOR_NAME": "smoke", "GIT_AUTHOR_EMAIL": "smoke@example.invalid",
             "GIT_COMMITTER_NAME": "smoke", "GIT_COMMITTER_EMAIL": "smoke@example.invalid"}
 EDITED = ".harness/docs/delegated-task.md"
+HOOKED = ".harness/hooks/agent-gate.py"
+HOOK_CALL = {"tool_name": "Read", "tool_input": {"file_path": "README.md", "path": "README.md"}}
 
 

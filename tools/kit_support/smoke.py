@@ -18,7 +18,7 @@ from installer.resources import (ANSWERS, LOADER, AREA_MAP, CONFIG, GUIDES, LEGA
                                  rewrite_lock, sha256)
 from installer.resources import msg as kit_msg
 from installer.resources import unpack
-from installer.lock_install import archive_build, loader
+from installer.lock_install import archive_build, git_file, loader
 from installer.verify import run_gate
 
 from .context import KIT, catalog, msg
@@ -27,6 +27,8 @@ from .fixtures import (
     DOTNET_FILES,
     DOTNET_PACKS,
     EDITED,
+    HOOK_CALL,
+    HOOKED,
     GITLAB_ANSWERS,
     GITLAB_CI,
     GITLAB_PIPELINES,
@@ -380,53 +382,6 @@ class Smoke:
         self.expect(msg("smoke_entry_line"), self.harness("verify", "--no-gates"), -1, reason=".harness/AGENTS.md")
         self.restore()
 
-    def legacy_layout(self) -> None:
-        """Проект прежней раскладки: блок комплекта в AGENTS.md, установленный стандарт и ссылки на файлы комплекта.
-        apply делает AGENTS.md и стандарт файлами проекта и снимает ссылки."""
-        agents = self.read("AGENTS.md")
-        kit_text = (self.repo / ".harness/AGENTS.md").read_text(encoding="utf-8").split("\n", 1)[1]
-        begin, end = markers("AGENTS.md", "core")
-        own, done = markers("AGENTS.md", PROJECT_BLOCK)
-        rules = ("- [находки](CONTRIBUTING.md#10-находки-по-пути), [релиз](docs/platform/delivery/ci-cd.md#релиз), "
-                 "[справочник](https://github.com/antnkretv/agent-harness/blob/abc123/payload/docs/platform/agents/harness.md#обновление), "
-                 "[`issue-dev`](.agents/skills/issue-dev/SKILL.md), [`check-docs.py`](.harness/scripts/check/check-docs.py)")
-        self.write("AGENTS.md", f"# Agents\n\n{begin}\n{kit_text.strip()}\n{end}\n\n{own}\n## smoke-own\n\n{rules}\n{done}\n")
-        lock = self.read_json(LOCK)
-        standard = "docs/platform/standards/text.md"
-        lock["files"]["AGENTS.md"] = {"role": "block", "block": "core", "module": "core", "sha256": "0" * 64}
-        lock["files"].pop(standard)
-        self.write_json(LOCK, lock)
-        record = Path(run(["git", "rev-parse", "--absolute-git-dir"], self.repo).stdout.strip()) / "harness" / "installed.json"
-        placed = json.loads(record.read_text(encoding="utf-8"))
-        placed["files"][standard] = "0" * 64
-        record.write_text(json.dumps(placed), encoding="utf-8")
-        run(["git", "rm", "-q", "--cached", "--", standard], self.repo)
-        self.write(standard, "# old installed copy\n")
-        ignore = self.read(".gitignore")
-        stop = ignore.index(markers(".gitignore", "core")[1])
-        self.write(".gitignore", ignore[:stop] + "/" + standard + "\n" + ignore[stop:])
-        self.commit("chore: smoke-legacy-layout")
-        self.expect(msg("smoke_legacy_apply"), self.apply(), reason=kit_msg("state_seed_converted"))
-        converted = self.read("AGENTS.md")
-        self.check(msg("smoke_legacy_converted"), "<!--" not in converted and "## smoke-own" in converted
-                   and ".harness/AGENTS.md" in converted and self.read_json(LOCK)["files"]["AGENTS.md"]["role"] == "seed")
-        self.check(msg("smoke_legacy_links"), "](" not in converted.split("## smoke-own", 1)[1]
-                   and "`.harness/CONTRIBUTING.md`" in converted and "`.harness/docs/ci-cd.md`" in converted
-                   and "`.harness/docs/harness.md`" in converted and "гейт `docs-structure`" in converted)
-        ignored = run(["git", "check-ignore", "-q", "--", standard], self.repo).returncode == 0
-        self.check(msg("smoke_legacy_adopted"), not ignored and self.read(standard) == (self.installed / "payload" / standard).read_text(encoding="utf-8"))
-        lock = self.read_json(LOCK)
-        lock["files"]["AGENTS.md"] = {"role": "block", "block": "core", "module": "core", "sha256": "0" * 64}
-        self.write_json(LOCK, lock)
-        self.expect(msg("smoke_apply_again"), self.apply())
-        self.check(msg("smoke_legacy_again"), self.read("AGENTS.md") == converted)
-        self.commit("chore: smoke-legacy-converted")
-        self.expect(msg("smoke_legacy_verify"), self.harness("verify", "--no-gates"))
-        self.expect(msg("smoke_apply_again"), self.apply())
-        self.check(msg("smoke_idempotent"), self.clean())
-        self.write("AGENTS.md", agents)
-        self.commit("chore: smoke-legacy-restored")
-
     def extensions(self) -> None:
         ignored = run(["git", "check-ignore", "-q", "--", SETTINGS], self.repo).returncode == 0
         self.check(msg("smoke_settings_ignored"), (self.repo / SETTINGS).is_file() and ignored
@@ -541,7 +496,7 @@ class Smoke:
             (self.repo / hook).chmod(0o644)
             self.expect(msg("smoke_apply_again"), self.apply())
             self.check(msg("smoke_exec_restored"), os.access(self.repo / hook, os.X_OK) and self.clean())
-        hook = ".claude/hooks/session-start.sh"
+        hook = ".harness/hooks/python.cmd"
         run(["git", "config", "core.fileMode", "false"], self.repo)
         run(["git", "update-index", "--chmod=-x", "--", hook], self.repo)
         self.expect(msg("smoke_apply_again"), self.apply())
@@ -793,6 +748,94 @@ class Smoke:
                    and "smoke-kit-line" not in read.stdout)
         self.expect(msg("smoke_lock_branch"), ["git", "switch", "-q", "develop"])
         self.released(newer)
+
+    def agent_hook(self, agent: str, root: Path) -> list[str]:
+        """Команда хука инструмента агента из его настройки в рабочей копии, как ее запускает агент."""
+        if agent == "claude":
+            groups = json.loads((root / ".claude/settings.json").read_text(encoding="utf-8"))["hooks"]["PreToolUse"]
+            command = groups[0]["hooks"][0]["command"].replace("$CLAUDE_PROJECT_DIR", root.as_posix())
+        elif agent == "codex":
+            command = json.loads((root / ".codex/hooks.json").read_text(encoding="utf-8"))["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+        else:
+            command = json.loads((root / ".cursor/hooks.json").read_text(encoding="utf-8"))["hooks"]["preToolUse"][0]["command"]
+        return ["bash", "-c", f"printf '%s' '{json.dumps(HOOK_CALL)}' | {command}"]
+
+    def hooked(self) -> None:
+        """Хуки агентов зовут только файлы git: свежий клон и новая рабочая копия получают слой на первом
+        вызове хука, git pull с новым lock обновляет его, а слой, который поставить нельзя, хук называет отказом."""
+        self.bootstrap()
+        if not self.configure(msg("smoke_configure"), *self.answers()) or not self.expect(msg("smoke_apply"), self.apply()):
+            return
+        self.commit("chore: harness")
+        hooks = json.dumps([self.read_json(config)["hooks"] for config in (".claude/settings.json", ".cursor/hooks.json", ".codex/hooks.json")])
+        placed = {item for item in run(["git", "ls-files", "-z", "--others", "--ignored", "--exclude-standard"],
+                                       self.repo).stdout.split("\0") if item}
+        self.check(msg("smoke_hook_tracked"), bool(placed) and not any(path in hooks for path in placed))
+        for agent in ("claude", "cursor", "codex"):
+            clone = self.work / f"clone-{agent}"
+            run(["git", "clone", "-q", str(self.repo), str(clone)], self.work)
+            tree = self.work / f"tree-{agent}"
+            run(["git", "-c", "core.hooksPath=/dev/null", "worktree", "add", "-q", "-b", f"smoke-{agent}", str(tree)], self.repo)
+            for root in (clone, tree):
+                bare = not (root / HOOKED).exists()
+                done = run(self.agent_hook(agent, root), root)
+                self.check(msg("smoke_hook_installs", agent, root.name), bare and done.returncode == 0
+                           and (root / HOOKED).is_file() and not run(["git", "status", "--porcelain"], root).stdout.strip())
+        clone = self.work / "clone-claude"
+        lock = json.loads((clone / LOCK).read_text(encoding="utf-8"))
+        lock["kit"].pop("tree")
+        (clone / LOCK).write_text(json_text(lock), encoding="utf-8", newline="\n")
+        self.check(msg("smoke_hook_unpinned"), run(self.agent_hook("claude", clone), clone).returncode == 0)
+        run(["git", "checkout", "-q", "--", LOCK], clone)
+        newer = variant(self.kit, self.work, following(self.kit), lambda text: text + "\nsmoke-kit-line\n")
+        self.expect(msg("smoke_apply"), self.apply(newer))
+        self.commit("chore: harness newer")
+        clone = self.work / "clone-codex"
+        run(["git", "pull", "-q", "--ff-only"], clone)
+        done = run(self.agent_hook("codex", clone), clone)
+        self.check(msg("smoke_hook_pulled"), done.returncode == 0
+                   and (clone / EDITED).read_text(encoding="utf-8").endswith("smoke-kit-line\n"))
+        clone = self.work / "clone-cursor"
+        lock = json.loads((clone / LOCK).read_text(encoding="utf-8"))
+        lock["kit"] = {**lock["kit"], "tree": "0" * 64, "repository": (self.work / "missing-kit").as_uri()}
+        lock["kit"].pop("commit", None)
+        (clone / LOCK).write_text(json_text(lock), encoding="utf-8", newline="\n")
+        done = run(self.agent_hook("cursor", clone), clone)
+        self.check(msg("smoke_hook_refused"), done.returncode == 2 and "ah.py install" in done.stderr and not done.stdout.strip())
+        self.parallel()
+
+    def parallel(self) -> None:
+        """Параллельные install в копиях клона пишут exclude под замком и не теряют разделы друг друга,
+        а раздел снятой копии уходит."""
+        trees = [self.repo] + [self.work / f"tree-{agent}" for agent in ("claude", "cursor")]
+        run(["git", "worktree", "remove", "--force", str(self.work / "tree-codex")], self.repo)
+        gone = self.work / "tree-gone"
+        run(["git", "-c", "core.hooksPath=/dev/null", "worktree", "add", "-q", "-b", "smoke-gone", str(gone)], self.repo)
+        run([sys.executable, str(gone / LOADER), "install"], gone)
+        shutil.rmtree(gone)
+        for tree in trees[1:]:
+            run(["git", "merge", "-q", "--ff-only", "develop"], tree)
+        exclude = git_file(self.repo, "info/exclude")
+        run([sys.executable, str(self.repo / LOADER), "install"], self.repo)
+        pruned = not any(f"worktrees/{name}" in exclude.read_text(encoding="utf-8") for name in ("tree-gone", "tree-codex"))
+        away = self.work / "tree-cursor-away"
+        run(["git", "worktree", "lock", str(trees[2])], self.repo)
+        trees[2].rename(away)
+        run([sys.executable, str(self.repo / LOADER), "install"], self.repo)
+        kept = "worktrees/tree-cursor" in exclude.read_text(encoding="utf-8")
+        away.rename(trees[2])
+        run(["git", "worktree", "unlock", str(trees[2])], self.repo)
+        passed = True
+        for _ in range(3):
+            exclude.write_text("", encoding="utf-8")
+            started = [subprocess.Popen([sys.executable, str(tree / LOADER), "install"], cwd=tree, env=ENV,
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) for tree in trees * 2]
+            passed &= all(process.wait() == 0 for process in started)
+        text = exclude.read_text(encoding="utf-8")
+        self.check(msg("smoke_exclude_locked"), kept)
+        self.check(msg("smoke_exclude_parallel"), pruned and passed and text.count("# harness:begin ") == len(trees)
+                   and not exclude.with_name("exclude.lock").exists()
+                   and all(not run(["git", "status", "--porcelain"], tree).stdout.strip() for tree in trees))
 
     def released(self, newer: Path) -> None:
         """Выпуск площадки - каталог file://: загрузчик скачивает архив версии lock в пустой кеш, а upgrade ставит
@@ -1110,7 +1153,6 @@ def smoke(kit_folder: Path, adapters: list[str], kit: dict) -> list[str]:
             scenario.isolated(kit)
             scenario.gates()
             scenario.preservation()
-            scenario.legacy_layout()
             scenario.extensions()
             scenario.legacy()
             scenario.violations()
@@ -1120,6 +1162,8 @@ def smoke(kit_folder: Path, adapters: list[str], kit: dict) -> list[str]:
         root = Path(folder)
         locked = Smoke(kit_folder, [], root / "lock")
         locked.locked()
+        hooked = Smoke(kit_folder, [], root / "hooks")
+        hooked.hooked()
         initialized = Smoke(kit_folder, [], root / "init")
         initialized.initialized()
         script = Smoke(kit_folder, [], root / "script")

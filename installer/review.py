@@ -131,7 +131,7 @@ def policy_documents(kit: Path, config: dict, root: Path, base: str) -> dict[str
     module = importlib.util.module_from_spec(package)
     sys.modules[name] = module
     package.loader.exec_module(module)
-    renderer, blocks_seed = (importlib.import_module(name + "." + child) for child in ("render", "migrate"))
+    renderer, blocks_seed = (importlib.import_module(name + "." + child) for child in ("render", "documents"))
     metadata = json.loads((kit / "kit.json").read_text(encoding="utf-8"))
     extra = {**renderer.computed(metadata, config), "harness.installDate": git(root, "show", "-s", "--format=%cs", base)}
     existing = set(git(root, "ls-tree", "-r", "--name-only", base).splitlines())

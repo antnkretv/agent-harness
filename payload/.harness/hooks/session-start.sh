@@ -6,6 +6,10 @@ set -uo pipefail
 
 PLATFORM_SAY_PREFIX='session-start: '
 
+if [ "${1:-}" = claude ]; then
+  AGENT_REMOTE="${CLAUDE_CODE_REMOTE:-false}" AGENT_ENV_FILE="${CLAUDE_ENV_FILE:-}"
+fi
+
 REPO_ROOT="${AGENT_PROJECT_DIR:-}"
 if [ -z "$REPO_ROOT" ]; then
   REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

@@ -1044,12 +1044,6 @@
       "module": "skills/grafana",
       "role": "managed"
     },
-    ".claude/hooks/session-start.sh": {
-      "module": "agents/claude-code",
-      "role": "managed",
-      "executable": true,
-      "place": "shell"
-    },
     ".claude/settings.json": {
       "module": "agents/claude-code",
       "role": "json"
@@ -1070,14 +1064,6 @@
         "agents/codex"
       ],
       "role": "block"
-    },
-    ".codex/hooks/session-start.py": {
-      "module": [
-        "agents/codex",
-        "agents/cursor"
-      ],
-      "role": "managed",
-      "place": "shell"
     },
     ".codex/rules/harness.rules": {
       "module": "agents/codex",
@@ -2758,7 +2744,8 @@
     ".harness/hooks/python.cmd": {
       "module": "core",
       "role": "managed",
-      "executable": true
+      "executable": true,
+      "place": "shell"
     },
     ".harness/lib/executables.py": {
       "module": "core",
