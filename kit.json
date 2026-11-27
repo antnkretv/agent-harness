@@ -4,7 +4,7 @@
     "Формат - PARAMETERS.md, сопровождение - MAINTAINING.md."
   ],
   "name": "agent-harness",
-  "version": "3.0.0",
+  "version": "2.0.0",
   "repository": "https://github.com/antnkretv/agent-harness",
   "released": [
     ".vale/styles/config/views/CSharpMessages.yml",
@@ -318,7 +318,7 @@
         "skills/dotnet-docs"
       ],
       "allow": [
-        "payload/.agents/skills/README.md"
+        "payload/.harness/docs/skills.md"
       ],
       "scope": "kit"
     },
@@ -392,8 +392,7 @@
     },
     ".agents/skills/README.md": {
       "module": "core",
-      "role": "block",
-      "render": true
+      "role": "seed"
     },
     ".agents/skills/alerting-irm/SKILL.md": {
       "module": "skills/grafana",
@@ -2637,25 +2636,23 @@
     },
     "AGENTS.md": {
       "module": "core",
-      "role": "block",
-      "render": true
+      "role": "seed"
     },
     "CLAUDE.md": {
       "module": "agents/claude-code",
-      "role": "block"
+      "role": "seed"
     },
     "CONTRIBUTING.md": {
       "module": "core",
-      "role": "block",
-      "render": true
+      "role": "seed"
     },
     "REVIEW.md": {
       "module": "core",
-      "role": "block"
+      "role": "seed"
     },
     "docs/README.md": {
       "module": "core",
-      "role": "block",
+      "role": "seed",
       "render": true
     },
     "docs/features/README.md": {
@@ -2664,62 +2661,20 @@
     },
     "docs/platform/adr/README.md": {
       "module": "core",
-      "role": "block"
-    },
-    "docs/platform/agents/environment.md": {
-      "module": "core",
-      "role": "managed",
-      "place": "reference"
-    },
-    "docs/platform/agents/harness-parameters.md": {
-      "module": "core",
-      "role": "managed",
-      "place": "reference"
-    },
-    "docs/platform/agents/harness.md": {
-      "module": "core",
-      "role": "managed",
-      "place": "reference"
-    },
-    "docs/platform/agents/prompts.md": {
-      "module": "core",
-      "role": "managed",
-      "render": true
-    },
-    "docs/platform/agents/templates.md": {
-      "module": "core",
-      "role": "managed"
-    },
-    "docs/platform/agents/terms.md": {
-      "module": "core",
-      "role": "managed"
-    },
-    "docs/platform/agents/delegated-task.md": {
-      "module": "core",
-      "role": "managed"
+      "role": "seed"
     },
     "docs/platform/architecture/area-map.md": {
       "module": "core",
-      "role": "managed"
+      "role": "seed"
     },
     "docs/platform/architecture/gates.md": {
       "module": "core",
-      "role": "managed"
-    },
-    "docs/platform/delivery/ci-cd.md": {
-      "module": "core",
-      "role": "managed",
-      "render": true
+      "role": "seed"
     },
     "docs/platform/delivery/deploy.md": {
       "module": "release/tag-flow",
       "role": "seed",
       "listed": "PARAMETERS.md"
-    },
-    "docs/platform/delivery/sdd.md": {
-      "module": "sdd/speckit",
-      "role": "managed",
-      "render": true
     },
     "docs/platform/operations/alerting.md": {
       "module": "alert-triage",
@@ -2738,27 +2693,23 @@
     },
     "docs/platform/standards/code-comments.md": {
       "module": "core",
-      "role": "managed"
+      "role": "seed"
     },
     "docs/platform/standards/documentation.md": {
       "module": "core",
-      "role": "managed"
+      "role": "seed"
     },
     "docs/platform/standards/product-terms.md": {
       "module": "core",
       "role": "seed"
     },
-    "docs/platform/standards/root-entry-docs.md": {
-      "module": "core",
-      "role": "managed"
-    },
     "docs/platform/standards/test-usefulness.md": {
       "module": "core",
-      "role": "managed"
+      "role": "seed"
     },
     "docs/platform/standards/text.md": {
       "module": "core",
-      "role": "managed"
+      "role": "seed"
     },
     "specs/README.md": {
       "module": "sdd/speckit",
@@ -2899,6 +2850,80 @@
     ".harness/templates/parts/change-fixes.md": {
       "module": "core",
       "role": "managed"
+    },
+    ".harness/docs/ci-cd.md": {
+      "module": "core",
+      "role": "managed",
+      "render": true
+    },
+    ".harness/docs/sdd.md": {
+      "module": "sdd/speckit",
+      "role": "managed",
+      "render": true
+    },
+    ".harness/docs/prompts.md": {
+      "module": "core",
+      "role": "managed",
+      "render": true
+    },
+    ".harness/docs/templates.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/docs/delegated-task.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/docs/terms.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/docs/root-entry-docs.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/docs/harness.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/docs/harness-parameters.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/docs/environment.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/AGENTS.md": {
+      "module": "core",
+      "role": "managed",
+      "render": true
+    },
+    ".harness/CLAUDE.md": {
+      "module": "agents/claude-code",
+      "role": "managed"
+    },
+    ".harness/CONTRIBUTING.md": {
+      "module": "core",
+      "role": "managed",
+      "render": true
+    },
+    ".harness/REVIEW.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/docs/README.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/docs/adr.md": {
+      "module": "core",
+      "role": "managed"
+    },
+    ".harness/docs/skills.md": {
+      "module": "core",
+      "role": "managed",
+      "render": true
     }
   }
 }

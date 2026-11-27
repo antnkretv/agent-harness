@@ -3,8 +3,7 @@
 > **Тип (Diataxis):** Справочник
 
 Документ задает структуру и проверяемые свойства документации. Правила языка и ошибок находятся в [стандарте текста](text.md), порядок вычитки - в скилле
-[`docs-text`](../../../.agents/skills/docs-text/SKILL.md), комментарии - в
-[`code-comments.md`](code-comments.md), git и PR - в [`CONTRIBUTING.md`](../../../CONTRIBUTING.md).
+`docs-text`, комментарии - в [`code-comments.md`](code-comments.md), git и PR - в `.harness/CONTRIBUTING.md` и [`CONTRIBUTING.md`](../../../CONTRIBUTING.md) проекта.
 
 ## Карта ролей
 
@@ -13,38 +12,30 @@
 
 | Документ | Роль |
 | --- | --- |
-| корневые `README.md`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `REVIEW.md` | [роли корневых файлов](root-entry-docs.md#роли-файлов) |
+| корневые `README.md`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `REVIEW.md` | вход и правила проекта; роли файлов - `.harness/docs/root-entry-docs.md` |
 | [`docs/README.md`](../../README.md) | индекс документации, стек и команды |
 | документ архитектуры проекта, на который ведет [индекс](../../README.md) | архитектура и карта модулей |
 | `docs/features/README.md` | индекс feature |
 | `docs/features/<feature>/` | устройство feature |
 | раздел продукта проекта, если он есть | продукт и рынок |
 | `docs/platform/adr/<area>/` | принятое решение и его причины |
-| [`docs/platform/adr/README.md`](../adr/README.md) | реестр и жизненный цикл ADR |
+| [`docs/platform/adr/README.md`](../adr/README.md) | реестр ADR проекта; нумерация и жизненный цикл - `.harness/docs/adr.md` |
 | `specs/<track>/` | активное требование и plan |
 | [`specs/README.md`](../../../specs/README.md) | статусы SDD |
 | `.specify/memory/constitution.md` | принципы проекта |
 | `.specify/templates/` | шаблоны артефактов Spec Kit |
-| [`.harness/README.md`](../../../.harness/README.md) | устройство скриптов и хуков платформы |
+| `.harness/README.md` | устройство скриптов и хуков платформы |
+| `.harness/AGENTS.md`, `.harness/CONTRIBUTING.md`, `.harness/REVIEW.md`, `.harness/docs/` | правила и справочники комплекта harness: их ставит `ah install`, проект их не правит; индекс - `.harness/docs/README.md` |
 | `.harness/project/manifest.json`, `.harness/methodology.json`, `.harness/pipelines.json` | исполняемые величины конвейера |
 | `.harness/templates/` (форма описания PR - `changeTemplate` поставщика кода, форма задачи - `issueTemplate` трекера) | шаблоны публикуемых текстов, формы тела PR и задачи и формы отчетов агента (`templates/forms/`): разделы и отметки автора |
-| [`.harness/mcp-stand/README.md`](../../../.harness/mcp-stand/README.md) | развертывание и эксплуатация стенда MCP |
+| `.harness/mcp-stand/README.md` | развертывание и эксплуатация стенда MCP |
 | [`.agents/skills/README.md`](../../../.agents/skills/README.md) | индекс skills и подключение поставки |
 | `.agents/skills/<имя>/SKILL.md` и его `references/` | шаги агента в своей задаче: команда и ссылка на документ механизма, без объяснения механизма |
-| `.claude/`, `.cursor/`, `.codex/`, `.harness/prompts/`, `.harness/review/`, `.harness/hooks/` | [роли корневых каталогов агентских активов](root-entry-docs.md#корневые-каталоги-агентских-активов) |
-| [`agents/harness.md`](../agents/harness.md) | устройство установленного слоя harness |
-| [`agents/harness-parameters.md`](../agents/harness-parameters.md) | справочник модулей, настроек и расширений |
-| [`agents/environment.md`](../agents/environment.md) | подготовка окружения агента |
-| [`agents/prompts.md`](../agents/prompts.md) | промпты и их исполнители |
-| [`agents/templates.md`](../agents/templates.md) | шаблоны публикуемых текстов и реестр переменных |
-| [`agents/terms.md`](../agents/terms.md) | термины harness |
-| [`agents/delegated-task.md`](../agents/delegated-task.md) | шаблон постановки исполнителю |
+| `.claude/`, `.cursor/`, `.codex/`, `.harness/prompts/`, `.harness/review/`, `.harness/hooks/` | роли корневых каталогов агентских активов (`.harness/docs/root-entry-docs.md`) |
 | [`architecture/gates.md`](../architecture/gates.md) | архитектурные гейты |
 | [`architecture/area-map.md`](../architecture/area-map.md) | карта областей |
 | `architecture/<стек>-rules.md` | правила кода, архитектуры и сборки стека, которые задает проект |
 | `AnalyzerReleases.*.md` проекта анализаторов | машинный реестр правил анализаторов |
-| [`delivery/ci-cd.md`](../delivery/ci-cd.md) | устройство конвейеров CI/CD, стадий и кругов ревью |
-| [`delivery/sdd.md`](../delivery/sdd.md) | процесс SDD |
 | `delivery/deploy.md`, `operations/` | выкладка и эксплуатация проекта |
 | `standards/` | стандарт своей темы: текст, документация, комментарии, тесты, корневые инструкции, глоссарий |
 
@@ -74,9 +65,9 @@
 - Тип не объявляют ADR, индекс `README.md`, чья задача - навигация, датированный снимок или аудит (дата в конце имени либо
   путь из `docs.historicalPrefixes`)
   и машинный текст (`docs.machineTextPrefixes`). `README.md` с собственным содержанием тип объявляет.
-- ADR фиксирует действующее архитектурное решение; правку и удаление задает [жизненный цикл](../adr/README.md#жизненный-цикл) реестра, номер - [правило нумерации](../adr/README.md#правило-нумерации).
+- ADR фиксирует действующее архитектурное решение; правку и удаление задает жизненный цикл, номер - правило нумерации из `.harness/docs/adr.md`.
 - Область, где строка обязательна, задает ключ `docs.typedPrefixes` манифеста
-  [`project/manifest.json`](../../../.harness/project/manifest.json), по умолчанию `docs/`; строку и значение проверяет `check-docs.py --area docs`, если проект включил проверку `types` в `docs.checks`.
+  [`project/manifest.json`](../../../.harness/project/manifest.json), по умолчанию `docs/`; строку и значение проверяет гейт `docs-structure` (область `docs`), если проект включил проверку `types` в `docs.checks`.
 
 ## Живой документ и снимок
 
@@ -92,7 +83,7 @@ commit; новые изменения его не переписывают. Не
 
 - C4 или draw.io используется только когда схема показывает связь лучше текста.
 - Диаграмма перечислена в индексе feature и обновляется с меняемой границей.
-- Имя symbol в обратных кавычках должно существовать в коде; это проверяет `check-doc-symbols.py`.
+- Имя symbol в обратных кавычках должно существовать в коде; это проверяет гейт `doc-symbols`.
 - XML-doc и JSDoc допустимы только для контракта, которого нет в сигнатуре, и подчиняются стандарту
   комментариев. Массовый `<summary>` с пересказом имени не добавляется.
 - OpenAPI, generated clients и schema snapshots являются generated artifacts, а не ручной reference.
@@ -101,7 +92,7 @@ commit; новые изменения его не переписывают. Не
 
 - Новый документ добавляется в ближайший индекс ровно один раз.
 - Feature documentation не дублируется в app docs; app docs описывают только свою платформенную сторону.
-- ADR входит в дерево со статусом `Accepted`: `Proposed` - статус открытого PR, а не дерева ([реестр](../adr/README.md#как-завести-новое-решение)).
+- ADR входит в дерево со статусом `Accepted`: `Proposed` - статус открытого PR, а не дерева (реестр: `.harness/docs/adr.md`).
 - Операционная величина - порог, лимит, `request`/`limit`, ретенция, имя метки, код ответа, таймаут, значение конфига - живет в чарте или конфиге и его runbook, а не в ADR.
 - Ссылка должна быть не только разрешимой, но и вести на обещанный по смыслу раздел.
 - Большой бинарник хранится вне repository; в индексе остается ссылка. Файл области документации не больше 1 МБ. Каталоги `legal/` и `assets/` корня документации от лимита свободны: юридические оригиналы и бинарные приложения хранятся в исходных форматах.
@@ -161,13 +152,13 @@ docs/features/
 
 Ссылки, якоря, секреты, диаграммы и инструкции агентов гейт проверяет всегда. Индекс, имена файлов,
 шапку ADR, тип Diataxis, словарь статусов и размер документа он проверяет, только когда проект
-включил их в `docs.checks` манифеста ([параметры](../agents/harness-parameters.md#раздел-docs)).
+включил их в `docs.checks` манифеста (параметры: `.harness/docs/harness-parameters.md`).
 
 Якорь ссылки `файл.md#раздел` сверяется со слагом заголовка цели по правилу поставщика кода проекта
 (у GitLab подряд идущие дефисы схлопываются в один, у GitHub и без поставщика - сохраняются) во всех
 отслеживаемых git файлах Markdown (`*.md`, `*.mdc` и корневой `llms.txt`), а не только в области
 `docs`: ссылки скиллов, промптов и корневых инструкций агент читает первыми. Сверку ведет отдельный
-проход `--anchors`, а не `--area`: `check-all.py` запускает его при каждой проверке, областью он не
+проход `--anchors`, а не `--area`: план `check-all.py` запускает его при каждой проверке, областью он не
 отбирается, локальная проверка области зовет его тем же флагом. Из охвата выходят вендорные skills
 (`docs.vendoredSkills` манифеста и Spec Kit), поставка и установленная база комплекта
 (`docs.payloadPrefixes`, `.harness/state/`), файлы комплекта (роли `managed` и `json` в
@@ -177,5 +168,5 @@ docs/features/
 отдельного исключения не требует.
 
 После структурной правки дополнительно запусти tests документации затронутой области. Review проверяет
-смысл по [`.harness/review/requirements.md`](../../../.harness/review/requirements.md), но не повторяет
+смысл по `.harness/review/requirements.md`, но не повторяет
 механические ошибки этих гейтов.

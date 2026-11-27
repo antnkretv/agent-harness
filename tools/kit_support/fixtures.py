@@ -27,6 +27,6 @@ BACKEND_DECISIONS = {"shape": "backend", "modules.backend": ["dotnet"], "modules
                      "modules.skills": ["dotnet-docs"]}
 IDENTITY = {"GIT_AUTHOR_NAME": "smoke", "GIT_AUTHOR_EMAIL": "smoke@example.invalid",
             "GIT_COMMITTER_NAME": "smoke", "GIT_COMMITTER_EMAIL": "smoke@example.invalid"}
-EDITED = "docs/platform/architecture/area-map.md"
+EDITED = ".harness/docs/delegated-task.md"
 
 

@@ -9,6 +9,6 @@ paths:
 
 # SDD-артефакты
 
-Перед созданием или правкой артефактов прочитайте и соблюдайте [`docs/platform/delivery/sdd.md`](../../docs/platform/delivery/sdd.md), [конституцию](../../.specify/memory/constitution.md) и [исполняемый workflow](../../.specify/workflows/speckit/workflow.yml).
+Перед созданием или правкой артефактов прочитайте и соблюдайте `.harness/docs/sdd.md`, [конституцию](../../.specify/memory/constitution.md) и исполняемый workflow (`.specify/workflows/speckit/workflow.yml`).
 
 Конвейер, структура и переходы живут в этих источниках и здесь не повторяются.

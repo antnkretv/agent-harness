@@ -12,10 +12,9 @@ from pathlib import Path
 
 from .prompt import answered
 from .install import apply
-from .render import revision
 from .lock_install import archive_build, loader
 from .verify import status
-from .resources import ANSWERS, LOCK, PROJECT, Refusal, git, kit_root, load_json, msg, read_lock, relocated, repository, say, sha256
+from .resources import ANSWERS, LOCK, PROJECT, Refusal, git, hidden, kit_root, load_json, msg, read_lock, relocated, repository, say, sha256
 
 TASK_WORKTREE = ".harness/scripts/pipeline/task-worktree.py"
 UPGRADE_CHANGE = ".harness/scripts/pipeline/kit-upgrade.py"
@@ -41,11 +40,11 @@ def configured(args: argparse.Namespace, change: bool) -> int:
     say("configure_done", PROJECT, ANSWERS)
     given = getattr(args, "archive", None)
     if change and not given:
-        return apply(argparse.Namespace(target=args.target, dry_run=False, archive=None, source=None))
+        return apply(argparse.Namespace(target=args.target, dry_run=False, archive=None))
     kit = own_kit()
     archive = Path(given).resolve() if given else released(kit, kit["version"])
     try:
-        return apply(argparse.Namespace(target=args.target, dry_run=False, archive=str(archive), source=""))
+        return apply(argparse.Namespace(target=args.target, dry_run=False, archive=str(archive)))
     finally:
         if not given:
             archive.unlink(missing_ok=True)
@@ -54,7 +53,7 @@ def configured(args: argparse.Namespace, change: bool) -> int:
 def upgrade(args: argparse.Namespace) -> int:
     root = repository(args.target)
     installed = read_lock(root).get("kit", {})
-    if not installed.get("sha256"):
+    if not installed.get("tree"):
         raise Refusal(msg("upgrade_unpinned", LOCK))
     kit = {**own_kit(), **{key: installed[key] for key in ("name", "repository") if installed.get(key)}}
     given = args.new_archive
@@ -65,7 +64,7 @@ def upgrade(args: argparse.Namespace) -> int:
     else:
         archive = released(kit, args.version or latest(kit["repository"]))
     try:
-        return upgraded(args, root, installed, kit["repository"], archive)
+        return upgraded(args, root, installed, archive)
     finally:
         if args.commit:
             shutil.rmtree(archive.parent, ignore_errors=True)
@@ -73,14 +72,14 @@ def upgrade(args: argparse.Namespace) -> int:
             archive.unlink(missing_ok=True)
 
 
-def upgraded(args: argparse.Namespace, root: Path, installed: dict, source: str, archive: Path) -> int:
+def upgraded(args: argparse.Namespace, root: Path, installed: dict, archive: Path) -> int:
     sha, shipped, tree = archive_build(archive)
     previous, version = label(installed), label(shipped)
     if tree == read_lock(root)["kit"].get("tree"):
-        say("upgrade_current", previous, sha[:12])
+        say("upgrade_current", previous, tree[:12])
         return 0
     ah = loader()
-    home = ah.CACHE / sha
+    home = ah.CACHE / tree
     if not ah.genuine(home, tree):
         ah.unpacked(archive, home, tree)
     new = [sys.executable, "-B", str(home / "ah.py")]
@@ -94,16 +93,18 @@ def upgraded(args: argparse.Namespace, root: Path, installed: dict, source: str,
     if read_lock(work)["kit"].get("tree") != tree:
         say("upgrade_overwrites")
         status(argparse.Namespace(target=str(work)))
-        relinked = relink(work, source, revision(installed), revision(shipped))
         run(new + ["init", "--target", str(work), "--archive", str(archive)], work, show=True)
         if args.no_pr:
-            say("upgrade_done", previous, version, relinked, home / "ah.py")
+            say("upgrade_done", previous, version, home / "ah.py")
             return 0
     listed = run(["git", "status", "--porcelain", "-z", "--no-renames", "--untracked-files=all"], work).stdout
     changed = [line[3:] for line in listed.split("\0") if line[1:2] not in ("", " ")]
+    forced = [path for path, *_ in hidden(work, read_lock(work).get("files", {}))]
     title = msg("upgrade_title", version)
     if changed:
         git(work, "add", "--", *changed)
+    if forced:
+        git(work, "add", "-f", "--", *forced)
     if git(work, "diff", "--cached", "--name-only"):
         run(new + ["verify", "--target", str(work), "--no-gates"], work, show=True)
         git(work, "commit", "-q", "-m", title)
@@ -168,19 +169,6 @@ def committed(repository: str, ref: str) -> Path:
         return ah.built(source, True)
     finally:
         shutil.rmtree(source, ignore_errors=True)
-
-
-def relink(root: Path, source: str, old: str, new: str) -> int:
-    if old == new:
-        return 0
-    before, after = f"{source}/blob/{old}/", f"{source}/blob/{new}/"
-    paths = [path for path in git(root, "grep", "-lzF", "-e", before, check=False).split("\0") if path]
-    for path in paths:
-        with open(root / path, encoding="utf-8", newline="") as file:
-            text = file.read()
-        with open(root / path, "w", encoding="utf-8", newline="") as file:
-            file.write(text.replace(before, after))
-    return len(paths)
 
 
 def run(command: list[str], cwd: Path, show: bool = False) -> subprocess.CompletedProcess:

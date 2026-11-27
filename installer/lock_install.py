@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import functools
-import importlib.util
 import json
 import os
 import tarfile
@@ -11,11 +9,13 @@ from pathlib import Path
 from .catalog import load_catalog
 from .documents import json_text
 from .render import plan
-from .resources import LOADER, POSIX_MODES, PROJECT, Refusal, build_of, read_lock, git, kit_root, load_json, msg, repository, say, sha256
+from .resources import POSIX_MODES, PROJECT, Refusal, read_lock, git, kit_root, load_json, loader, msg, repository, say, sha256
 from .state import Installer
 from .verify import installed_kit
 
 RECORD = "harness/installed.json"
+EXCLUDE = "info/exclude"
+SECTION = "# harness:begin ", "# harness:end "
 
 
 def archive_build(archive: Path) -> tuple[str, dict, str]:
@@ -25,21 +25,48 @@ def archive_build(archive: Path) -> tuple[str, dict, str]:
             raise Refusal(msg("install_archive_shape", archive))
         kit = json.loads(tar.extractfile(manifests[0]).read().decode("utf-8"))
         files = [(member.name.split("/", 1)[1], tar.extractfile(member).read())
-                 for member in tar.getmembers() if member.isfile() and "/" in member.name]
+                 for member in tar.getmembers() if member.isfile() and "/" in member.name and "__pycache__" not in member.name.split("/")]
     return sha256(archive.read_bytes()), kit, loader().tree_digest(files)
 
 
-@functools.cache
-def loader():
-    spec = importlib.util.spec_from_file_location("ah_loader", kit_root() / "payload" / LOADER)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def git_file(root: Path, name: str) -> Path:
+    found = Path(git(root, "rev-parse", "--git-path", name))
+    return found if found.is_absolute() else root / found
 
 
 def record_path(root: Path) -> Path:
-    found = Path(git(root, "rev-parse", "--git-path", RECORD))
-    return found if found.is_absolute() else root / found
+    return git_file(root, RECORD)
+
+
+def exclude_sections(text: str) -> tuple[list[str], dict[str, list[str]]]:
+    own, sections, current = [], {}, None
+    for line in text.splitlines():
+        if current is None and line.startswith(SECTION[0]):
+            current = line[len(SECTION[0]):]
+            sections[current] = []
+        elif current is not None and line == SECTION[1] + current:
+            current = None
+        elif current is not None:
+            sections[current].append(line)
+        else:
+            own.append(line)
+    return own, sections
+
+
+def exclude(root: Path, paths: list[str]) -> None:
+    target = git_file(root, EXCLUDE)
+    key = git(root, "rev-parse", "--absolute-git-dir")
+    text = target.read_text(encoding="utf-8") if target.is_file() else ""
+    own, sections = exclude_sections(text)
+    sections = {name: lines for name, lines in sections.items() if name != key and os.path.isdir(name)}
+    sections[key] = ["/" + path for path in sorted(paths)]
+    lines = own + [line for name, found in sections.items() for line in (SECTION[0] + name, *found, SECTION[1] + name)]
+    fresh = "\n".join(lines) + "\n"
+    if fresh != text:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(f".{target.name}.{os.getpid()}.harness-new")
+        temporary.write_text(fresh, encoding="utf-8", newline="\n")
+        os.replace(temporary, target)
 
 
 def recorded(record: Path) -> list[str]:
@@ -51,6 +78,7 @@ def place_files(root: Path, kit: dict, every: list) -> Installer:
     record = record_path(root)
     previous = recorded(record)
     installer, files = Installer(root, False), {}
+    exclude(root, [item.path for item in every if item.place == "lock"])
     for item in every:
         if item.place != "lock":
             continue
@@ -68,7 +96,7 @@ def place_files(root: Path, kit: dict, every: list) -> Installer:
         if path not in kept and (root / path).is_file():
             installer.remove(root / path)
             installer.report.append((path, msg("state_retired")))
-    text = json_text({"kit": read_lock(root).get("kit", {}).get("sha256", ""), "files": dict(sorted(files.items()))})
+    text = json_text({"kit": read_lock(root).get("kit", {}).get("tree", ""), "files": dict(sorted(files.items()))})
     if not record.is_file() or record.read_text(encoding="utf-8") != text:
         record.parent.mkdir(parents=True, exist_ok=True)
         fresh = record.with_name(f".{record.name}.{os.getpid()}.harness-new")

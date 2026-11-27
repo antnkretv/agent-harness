@@ -17,9 +17,9 @@ from .resources import (
     Refusal,
     SETTINGS,
     SETTINGS_DEFAULTS,
-    build_of,
     git,
     index_modes,
+    kit_tree,
     prefixes,
     kit_root,
     load_json,
@@ -29,17 +29,17 @@ from .resources import (
     say,
 )
 from .lock_install import archive_build, place_files, record_path, recorded
+from .migrate import legacy_layout, relinked
 from .state import Installer
 from .verify import run_gate
 
-KIT_FIELDS = ("name", "version", "repository", "digest", "config", "sha256", "tree", "source", "commit")
+KIT_FIELDS = ("name", "version", "repository", "commit", "tree")
 
 
-def write_lock(root: Path, kit: dict, catalog: dict, paths: frozenset[str], files: dict, archive: tuple[str, str], source: str) -> None:
+def write_lock(root: Path, kit: dict, catalog: dict, paths: frozenset[str], files: dict, tree: str) -> None:
     lock = {
         "_": [msg("lock_note_1"), msg("lock_note_2")],
-        "kit": {key: value for key, value in {**kit, "config": build_of(kit)[2], "sha256": archive[0], "tree": archive[1], "source": source}.items()
-                if key in KIT_FIELDS and value},
+        "kit": {key: value for key, value in {**kit, "tree": tree}.items() if key in KIT_FIELDS and value},
         "manifest": git(root, "hash-object", "--", PROJECT),
         "modules": sorted(paths),
         "absent": sorted(absent_paths(kit, paths, catalog)),
@@ -82,18 +82,16 @@ def _apply(args: argparse.Namespace, root: Path) -> int:
         raise Refusal(msg("packed_beyond", ", ".join(beyond)))
     lock = read_lock(root)
     installed = lock.get("kit", {})
-    same = build_of(installed) == build_of(kit)
-    archive = (installed.get("sha256", ""), installed.get("tree", "")) if same else ("", "")
+    tree = kit_tree()
     if args.archive:
-        sha, shipped, tree = archive_build(Path(args.archive).resolve())
-        archive = (sha, tree)
-        if build_of(shipped) != build_of(kit):
+        _, shipped, packed = archive_build(Path(args.archive).resolve())
+        if packed != tree or shipped.get("version") != kit.get("version"):
             raise Refusal(msg("apply_archive_other", args.archive, kit_dir))
-    elif installed.get("sha256") and not archive[0]:
+        tree = packed
+    elif not tree:
         say("apply_unpinned", LOCK)
-    if installed.get("version") == kit.get("version") and installed.get("digest") and kit.get("digest") \
-            and installed["digest"] != kit["digest"]:
-        say("apply_same_version", kit["version"], installed["digest"][:12], kit["digest"][:12])
+    if installed.get("version") == kit.get("version") and installed.get("tree") and tree and installed["tree"] != tree:
+        say("apply_same_version", kit["version"], installed["tree"][:12], tree[:12])
     planned = list(plan(kit_dir, kit, catalog, project, root, lock))
     collisions = case_collisions(root, [item.path for item in planned])
     if collisions:
@@ -101,21 +99,25 @@ def _apply(args: argparse.Namespace, root: Path) -> int:
             print("  - " + line)
         raise Refusal(msg("apply_case_collision"))
     released = frozenset(kit.get("released", []))
+    placed = set(recorded(record_path(root)))
     installer = Installer(root, True)
-    installer.refuse_taken_skills(planned, set(lock.get("files", {})) | set(recorded(record_path(root))))
+    installer.placed = placed
+    installer.refuse_taken_skills(planned, set(lock.get("files", {})) | placed)
     files = installer.shell(planned, lock, released)
     if not args.dry_run:
         installer = Installer(root, False)
+        installer.placed = placed
         files = installer.shell(planned, lock, released)
         outside = {item.path for item in planned if item.place != "shell"}
         untracked = sorted(path for path in index_modes(root) if path in outside)
         if untracked:
             git(root, "rm", "-q", "--cached", "--", *untracked)
-        placed = place_files(root, kit, planned)
-        installer.report += placed.report
-        installer.unchanged += placed.unchanged
-        write_lock(root, kit, catalog, enabled(project), files, archive,
-                   installed.get("source", "") if args.source is None else args.source)
+        moved = place_files(root, kit, planned)
+        installer.report += moved.report
+        installer.unchanged += moved.unchanged
+        if legacy_layout(lock):
+            relinked(root, planned)
+        write_lock(root, kit, catalog, enabled(project), files, tree)
         if not (root / SETTINGS).exists() and (root / SETTINGS_DEFAULTS).is_file():
             shutil.copyfile(root / SETTINGS_DEFAULTS, root / SETTINGS)
             installer.report.append((SETTINGS, msg("state_created")))

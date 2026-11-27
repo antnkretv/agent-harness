@@ -18,7 +18,7 @@ from installer.resources import (ANSWERS, LOADER, AREA_MAP, CONFIG, GUIDES, LEGA
                                  rewrite_lock, sha256)
 from installer.resources import msg as kit_msg
 from installer.resources import unpack
-from installer.lock_install import loader
+from installer.lock_install import archive_build, loader
 from installer.verify import run_gate
 
 from .context import KIT, catalog, msg
@@ -169,7 +169,7 @@ class Smoke:
         return used
 
     def apply(self, kit: Path | None = None) -> list[str]:
-        """Установка идет архивом сборки, как у владельца: lock.json закрепляет его sha256."""
+        """Установка идет архивом сборки, как у владельца: lock.json закрепляет его tree."""
         kit = kit or self.kit
         return self.installer(kit) + ["apply", "--target", str(self.repo), "--archive", str(self.archive_of(kit))]
 
@@ -334,8 +334,9 @@ class Smoke:
 
     def preservation(self) -> None:
         agents = self.read("AGENTS.md")
-        own = agents.index(markers("AGENTS.md", PROJECT_BLOCK)[1])
-        agents = agents[:own] + "## smoke-project-rule\n" + agents[own:]
+        self.check(msg("smoke_seed_entry"), ".harness/AGENTS.md" in agents and "<!--" not in agents
+                   and "@.harness/AGENTS.md" in self.read("CLAUDE.md"))
+        agents += "\n## smoke-project-rule\n"
         self.write("AGENTS.md", agents)
         self.write("specs/README.md", self.read("specs/README.md") + "\nsmoke-project-row\n")
         seed = ".github/workflows/project-deploy.yml"
@@ -343,7 +344,7 @@ class Smoke:
         (self.repo / seed).unlink()
         self.commit("docs: smoke-project-rules")
         self.expect(msg("smoke_apply_keeps"), self.apply())
-        self.check(msg("smoke_block_outside_kept"), self.read("AGENTS.md") == agents)
+        self.check(msg("smoke_seed_project_kept"), self.read("AGENTS.md") == agents)
         self.check(msg("smoke_section_kept"), "\n[*]\nindent_style = tab\n" in compose(
             ".editorconfig", "root = true\n\n[*]\nindent_style = tab\n", self.read(".editorconfig"), "core"))
         self.check(msg("smoke_seed_kept"), self.read("specs/README.md").endswith("smoke-project-row\n"))
@@ -352,19 +353,78 @@ class Smoke:
         self.expect(msg("smoke_seed_dangling"), [sys.executable, ".harness/scripts/check/check-pipeline.py"], -1, reason=seed)
         self.write(seed, deploy)
         self.commit("chore: smoke-seed-restored")
-        begin, end = markers("AGENTS.md", "core")
-        self.check(msg("smoke_no_duplicates"), agents.count(begin) == 1)
-        stop = agents.index(end)
-        self.write("AGENTS.md", agents[:stop] + "smoke-project-block-line\n" + agents[stop:])
-        self.expect(msg("smoke_status_edit"), self.harness("status"), reason="AGENTS.md")
+        path = ".editorconfig"
+        config = self.read(path)
+        begin, end = markers(path, "core")
+        self.check(msg("smoke_no_duplicates"), config.count(begin) == 1)
+        stop = config.index(end)
+        self.write(path, config[:stop] + "smoke-project-block-line\n" + config[stop:])
+        self.expect(msg("smoke_status_edit"), self.harness("status"), reason=path)
         self.expect(msg("smoke_apply_again"), self.apply())
-        self.check(msg("smoke_block_overwritten"), self.read("AGENTS.md") == agents and self.clean())
-        self.write("AGENTS.md", agents + "smoke-stray-line\n")
-        self.expect(msg("smoke_outside_verify"), self.harness("verify", "--no-gates"), -1, reason="AGENTS.md")
+        self.check(msg("smoke_block_overwritten"), self.read(path) == config and self.clean())
+        self.write(path, config + "smoke-stray-line\n")
+        self.expect(msg("smoke_outside_verify"), self.harness("verify", "--no-gates"), -1, reason=path)
         self.expect(msg("smoke_apply_again"), self.apply())
-        moved = self.read("AGENTS.md")
-        self.check(msg("smoke_outside_moved"), "smoke-stray-line\n" + markers("AGENTS.md", PROJECT_BLOCK)[1] in moved)
+        moved = self.read(path)
+        self.check(msg("smoke_outside_moved"), "smoke-stray-line\n" + markers(path, PROJECT_BLOCK)[1] in moved)
         self.restore()
+        self.project_files()
+
+    def project_files(self) -> None:
+        """Отслеживаемый файл не ссылается на установленный, а AGENTS.md подключает правила комплекта."""
+        self.write("docs/own.md", "# own\n\nГейты - [ci-cd](../.harness/docs/ci-cd.md).\n")
+        self.expect(msg("smoke_installed_link"), self.harness("verify", "--no-gates"), -1, reason="docs/own.md:3")
+        self.write("docs/own.md", "# own\n\nГейты - `.harness/docs/ci-cd.md`.\n")
+        self.write("AGENTS.md", "# Agents\n")
+        self.expect(msg("smoke_entry_line"), self.harness("verify", "--no-gates"), -1, reason=".harness/AGENTS.md")
+        self.restore()
+
+    def legacy_layout(self) -> None:
+        """Проект прежней раскладки: блок комплекта в AGENTS.md, установленный стандарт и ссылки на файлы комплекта.
+        apply делает AGENTS.md и стандарт файлами проекта и снимает ссылки."""
+        agents = self.read("AGENTS.md")
+        kit_text = (self.repo / ".harness/AGENTS.md").read_text(encoding="utf-8").split("\n", 1)[1]
+        begin, end = markers("AGENTS.md", "core")
+        own, done = markers("AGENTS.md", PROJECT_BLOCK)
+        rules = ("- [находки](CONTRIBUTING.md#10-находки-по-пути), [релиз](docs/platform/delivery/ci-cd.md#релиз), "
+                 "[справочник](https://github.com/antnkretv/agent-harness/blob/abc123/payload/docs/platform/agents/harness.md#обновление), "
+                 "[`issue-dev`](.agents/skills/issue-dev/SKILL.md), [`check-docs.py`](.harness/scripts/check/check-docs.py)")
+        self.write("AGENTS.md", f"# Agents\n\n{begin}\n{kit_text.strip()}\n{end}\n\n{own}\n## smoke-own\n\n{rules}\n{done}\n")
+        lock = self.read_json(LOCK)
+        standard = "docs/platform/standards/text.md"
+        lock["files"]["AGENTS.md"] = {"role": "block", "block": "core", "module": "core", "sha256": "0" * 64}
+        lock["files"].pop(standard)
+        self.write_json(LOCK, lock)
+        record = Path(run(["git", "rev-parse", "--absolute-git-dir"], self.repo).stdout.strip()) / "harness" / "installed.json"
+        placed = json.loads(record.read_text(encoding="utf-8"))
+        placed["files"][standard] = "0" * 64
+        record.write_text(json.dumps(placed), encoding="utf-8")
+        run(["git", "rm", "-q", "--cached", "--", standard], self.repo)
+        self.write(standard, "# old installed copy\n")
+        ignore = self.read(".gitignore")
+        stop = ignore.index(markers(".gitignore", "core")[1])
+        self.write(".gitignore", ignore[:stop] + "/" + standard + "\n" + ignore[stop:])
+        self.commit("chore: smoke-legacy-layout")
+        self.expect(msg("smoke_legacy_apply"), self.apply(), reason=kit_msg("state_seed_converted"))
+        converted = self.read("AGENTS.md")
+        self.check(msg("smoke_legacy_converted"), "<!--" not in converted and "## smoke-own" in converted
+                   and ".harness/AGENTS.md" in converted and self.read_json(LOCK)["files"]["AGENTS.md"]["role"] == "seed")
+        self.check(msg("smoke_legacy_links"), "](" not in converted.split("## smoke-own", 1)[1]
+                   and "`.harness/CONTRIBUTING.md`" in converted and "`.harness/docs/ci-cd.md`" in converted
+                   and "`.harness/docs/harness.md`" in converted and "гейт `docs-structure`" in converted)
+        ignored = run(["git", "check-ignore", "-q", "--", standard], self.repo).returncode == 0
+        self.check(msg("smoke_legacy_adopted"), not ignored and self.read(standard) == (self.installed / "payload" / standard).read_text(encoding="utf-8"))
+        lock = self.read_json(LOCK)
+        lock["files"]["AGENTS.md"] = {"role": "block", "block": "core", "module": "core", "sha256": "0" * 64}
+        self.write_json(LOCK, lock)
+        self.expect(msg("smoke_apply_again"), self.apply())
+        self.check(msg("smoke_legacy_again"), self.read("AGENTS.md") == converted)
+        self.commit("chore: smoke-legacy-converted")
+        self.expect(msg("smoke_legacy_verify"), self.harness("verify", "--no-gates"))
+        self.expect(msg("smoke_apply_again"), self.apply())
+        self.check(msg("smoke_idempotent"), self.clean())
+        self.write("AGENTS.md", agents)
+        self.commit("chore: smoke-legacy-restored")
 
     def extensions(self) -> None:
         ignored = run(["git", "check-ignore", "-q", "--", SETTINGS], self.repo).returncode == 0
@@ -532,6 +592,8 @@ class Smoke:
         self.commit("docs: smoke-project-edit")
         self.upgrade(msg("smoke_update"), newer)
         self.check(msg("smoke_update_kit_version"), self.read(EDITED) == (newer / "payload" / EDITED).read_text(encoding="utf-8"))
+        changed = run(["git", "status", "--porcelain", "--untracked-files=all"], self.repo).stdout.splitlines()
+        self.check(msg("smoke_update_lock_only"), [line[3:] for line in changed] == [LOCK])
         self.commit(f"chore: harness {version}")
         self.expect(msg("smoke_apply_again"), self.apply(newer))
         self.check(msg("smoke_idempotent"), self.clean())
@@ -554,7 +616,7 @@ class Smoke:
         self.expect(msg("smoke_manifest_moved_gate"), [sys.executable, ".harness/scripts/check/check-pipeline.py"], -1,
                     reason=PROJECT)
         self.expect(msg("smoke_apply_again"), self.apply(self.installed))
-        self.check(msg("smoke_reconfigure"), "smoke-release" in self.read("docs/platform/delivery/ci-cd.md"))
+        self.check(msg("smoke_reconfigure"), "smoke-release" in self.read(".harness/docs/ci-cd.md"))
         self.restore()
 
     def node(self) -> None:
@@ -710,7 +772,8 @@ class Smoke:
             return
         first = self.archive_of(self.kit)
         self.commit("chore: harness")
-        self.check(msg("smoke_lock_sha"), self.read_json(LOCK)["kit"].get("sha256") == sha256(first.read_bytes()))
+        self.check(msg("smoke_lock_sha"), self.read_json(LOCK)["kit"].get("tree") == archive_build(first)[2]
+                   and set(self.read_json(LOCK)["kit"]) <= {"name", "version", "repository", "commit", "tree"})
         (self.repo / EDITED).unlink()
         self.expect(msg("smoke_lock_cache"), loader)
         self.check(msg("smoke_lock_restored"), self.clean() and (self.repo / ".harness/kit/ah.py").is_file())
@@ -744,16 +807,14 @@ class Smoke:
             published.write_bytes(data)
             published.with_name(published.name + ".sha256").write_text(f"{sha256(data)}  {published.name}\n")
         version = shipped["version"]
-        old = lock["kit"]["version"]
         self.write_json(LOCK, lock)
-        self.write("docs/own.md", f"<{releases.as_uri()}/blob/v{old}/payload/docs/platform/agents/harness.md>\n")
         self.commit("chore: harness releases")
         empty = {"AGENT_HARNESS_CACHE": str(self.work / "download-cache")}
         self.expect(msg("smoke_release_download"), [sys.executable, str(self.repo / LOADER), "install"], env=empty)
-        self.check(msg("smoke_release_cached"), (self.work / "download-cache" / lock["kit"]["sha256"] / "ah.py").is_file())
+        self.check(msg("smoke_release_cached"), (self.work / "download-cache" / lock["kit"]["tree"] / "ah.py").is_file())
         self.expect(msg("smoke_upgrade"), self.harness("upgrade", "--version", version, "--no-pr"))
         self.check(msg("smoke_upgraded"), self.read_json(LOCK)["kit"]["version"] == version
-                   and self.read(EDITED).endswith("smoke-kit-line\n") and f"/blob/v{version}/" in self.read("docs/own.md"))
+                   and self.read(EDITED).endswith("smoke-kit-line\n"))
         self.expect(msg("smoke_upgrade_current"), self.installer(newer) + ["upgrade", "--target", str(self.repo),
                                                                           "--new-archive", str(self.archive_of(newer)), "--no-pr"],
                     reason=kit_msg("upgrade_current", version, "\0").split("\0")[0])
@@ -783,7 +844,6 @@ class Smoke:
         missing = (self.work / "missing-kit").as_uri()
         lock["kit"]["repository"] = missing
         self.write_json(LOCK, lock)
-        self.write("docs/own.md", f"<{source.as_uri()}/blob/{old}/payload/docs/platform/agents/harness.md>\n")
         self.commit("chore: harness")
         head = run(["git", "symbolic-ref", "HEAD"], self.repo).stdout
         hook = {"AGENT_HARNESS_CACHE": str(self.work / "commit-cache"), "GIT_CONFIG_COUNT": "2",
@@ -793,7 +853,7 @@ class Smoke:
         self.expect(msg("smoke_commit_built"), [sys.executable, str(self.repo / LOADER), "install"], env=hook)
         self.check(msg("smoke_commit_hook"), self.clean() and not (self.repo / ".git" / "shallow").exists()
                    and run(["git", "symbolic-ref", "HEAD"], self.repo).stdout == head)
-        self.check(msg("smoke_commit_cached"), (self.work / "commit-cache" / f"src-{lock['kit']['tree']}" / "ah.py").is_file())
+        self.check(msg("smoke_commit_cached"), (self.work / "commit-cache" / lock["kit"]["tree"] / "ah.py").is_file())
         edited = source / "payload" / EDITED
         edited.write_text(edited.read_text(encoding="utf-8") + "\nsmoke-kit-line\n", encoding="utf-8", newline="\n")
         run(["git", "commit", "-qam", "kit next"], source)
@@ -803,7 +863,7 @@ class Smoke:
         self.write_json(LOCK, lock)
         self.expect(msg("smoke_commit_upgrade"), self.harness("upgrade", "--commit", "develop", "--no-pr"))
         self.check(msg("smoke_commit_upgraded"), self.read_json(LOCK)["kit"].get("commit") == new
-                   and self.read(EDITED).endswith("smoke-kit-line\n") and f"/blob/{new}/" in self.read("docs/own.md"))
+                   and self.read(EDITED).endswith("smoke-kit-line\n"))
         lock = self.read_json(LOCK)
         lock["kit"]["repository"] = source.as_uri()
         self.write_json(LOCK, lock)
@@ -830,7 +890,7 @@ class Smoke:
         self.seed(dict(pair.split("=", 1) for pair in self.answers()))
         if not self.expect(msg("smoke_init"), command):
             return
-        self.check(msg("smoke_init_state"), self.read_json(LOCK)["kit"].get("sha256") == sha256(self.archive_of(self.kit).read_bytes())
+        self.check(msg("smoke_init_state"), self.read_json(LOCK)["kit"].get("tree") == archive_build(self.archive_of(self.kit))[2]
                    and self.linked() and (self.repo / PROJECT).is_file()
                    and self.read_json(ANSWERS)["answers"].get("project.name", {}).get("by") == "detected"
                    and all(self.read_json(ANSWERS)["answers"].get(key, {}).get("by") == "default"
@@ -876,7 +936,7 @@ class Smoke:
 
     def linked(self) -> bool:
         """Каталог комплекта ведет на версию в кеше, которую называет lock.json текущей ветки."""
-        pinned = Path(ENV["AGENT_HARNESS_CACHE"]) / self.read_json(LOCK)["kit"]["sha256"]
+        pinned = Path(ENV["AGENT_HARNESS_CACHE"]) / self.read_json(LOCK)["kit"]["tree"]
         return (self.repo / ".harness/kit").resolve() == pinned.resolve()
 
     def sequence(self) -> None:
@@ -995,6 +1055,7 @@ def smoke(kit_folder: Path, adapters: list[str], kit: dict) -> list[str]:
             scenario.isolated(kit)
             scenario.gates()
             scenario.preservation()
+            scenario.legacy_layout()
             scenario.extensions()
             scenario.legacy()
             scenario.violations()

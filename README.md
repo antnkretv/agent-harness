@@ -1,9 +1,10 @@
 # agent-harness
 
 Комплект ставит в репозиторий проекта правила, гейты и конвейер задачи `issue-dev` для работы ИИ-агентов.
-В git проекта лежат только его настройки и тонкая оболочка: `.harness/project/`, `.harness/state/lock.json`,
-загрузчик `.harness/ah.py`, workflow CI, блоки комплекта в `AGENTS.md` и настройки агентов. Остальное
-`ah install` ставит по закрепленной в lock версии в неотслеживаемые пути.
+В git проекта лежат только его файлы, настройки и тонкая оболочка: `.harness/project/`, `.harness/state/lock.json`,
+загрузчик `.harness/ah.py`, workflow CI и настройки агентов. Остальное, в том числе правила агентов
+`.harness/AGENTS.md` и документы комплекта `.harness/docs/`, `ah install` ставит по закрепленной в lock версии
+в неотслеживаемые пути; `AGENTS.md` проекта подключает их одной строкой.
 
 ## Быстрый старт
 
@@ -62,6 +63,6 @@ git push origin master                                    # release.yml став
 
 ## Подробнее
 
-- Установленный слой, установка по lock и обновление - [harness.md](payload/docs/platform/agents/harness.md).
+- Установленный слой, установка по lock и обновление - [harness.md](payload/.harness/docs/harness.md).
 - Модули, архив под решения, манифест и коды установщика - [PARAMETERS.md](PARAMETERS.md).
 - Сборка, проверка, выпуск и устройство комплекта - [MAINTAINING.md](MAINTAINING.md).

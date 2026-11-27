@@ -5,8 +5,8 @@
 Заполните контракт фактическими именами, путями и правилами проекта до первой выкладки.
 Примерные строки таблиц замените данными проекта.
 
-Конвейер релиза описан в [ci-cd](ci-cd.md#релиз), состав модуля `release/tag-flow` - в
-[параметрах harness](../agents/harness-parameters.md#release).
+Конвейер релиза описан в `.harness/docs/ci-cd.md`, состав модуля `release/tag-flow` - в
+параметрах harness (`.harness/docs/harness-parameters.md`).
 
 ## Сборка и адресация образов
 

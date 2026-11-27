@@ -10,8 +10,10 @@ import tomllib
 from pathlib import Path
 
 from .documents import block_of, compose, entry_markers, json_indent, json_text, kit_lists, layout, markers, merge_json, overlay_json
+from .migrate import converted, seeded, unwired
 from .render import AGENT_SERVERS, server_clashes
 from .resources import (
+    PROJECT_BLOCK,
     Item,
     POSIX_MODES,
     Refusal,
@@ -40,14 +42,13 @@ class Installer:
         self.warnings: list[str] = []
         self.unchanged = 0
         self.moded: set[str] = set()
+        self.placed: set[str] = set()
 
     def shell(self, every: list[Item], lock: dict, released: frozenset[str]) -> dict:
         return self.run([item for item in every if item.place == "shell"], lock, released,
-                        frozenset(item.path for item in every if item.place == "lock"),
-                        frozenset(item.path for item in every if item.place == "reference"))
+                        frozenset(item.path for item in every if item.place == "lock"))
 
-    def run(self, planned: list[Item], lock: dict, released: frozenset[str], kept: frozenset[str] = frozenset(),
-            references: frozenset[str] = frozenset()) -> dict:
+    def run(self, planned: list[Item], lock: dict, released: frozenset[str], kept: frozenset[str] = frozenset()) -> dict:
         files = {}
         handlers = {"managed": self.managed, "json": self.managed, "seed": self.seed, "block": self.block}
         for item in planned:
@@ -60,7 +61,7 @@ class Installer:
             if path in released:
                 self.report.append((path, msg("state_released")))
             else:
-                self.retire(path, entry, path in references)
+                self.retire(path, entry)
         return files
 
     def refuse_taken_skills(self, planned: list[Item], owned: set[str]) -> None:
@@ -122,7 +123,7 @@ class Installer:
             return
         git(self.root, "update-index", "--add", "--chmod=" + ("+x" if executable else "-x"), "--", path, check=False)
 
-    def retire(self, path: str, entry: dict, reference: bool = False) -> None:
+    def retire(self, path: str, entry: dict) -> None:
         target = self.root / path
         if not target.is_file():
             return
@@ -144,7 +145,7 @@ class Installer:
                 self.remove(target)
             else:
                 target.write_bytes(rest.encode("utf-8"))
-        self.report.append((path, msg("state_reference" if reference else "state_retired")))
+        self.report.append((path, msg("state_retired")))
 
     def remove(self, target: Path) -> None:
         target.unlink()
@@ -181,16 +182,33 @@ class Installer:
 
     def seed(self, item: Item, previous: dict) -> dict:
         target = self.root / item.path
-        entry = {"role": "seed", "module": item.module}
-        if target.exists():
+        template = item.content.decode("utf-8", "replace")
+        content = seeded(item.path, template).encode("utf-8") if markers(item.path, PROJECT_BLOCK)[0] in template \
+            else item.content
+        entry = {"role": "seed", "module": item.module, "edition": sha256(content)}
+        if target.exists() and previous.get("role") == "block" and markers(item.path, "core")[0] in target.read_text(encoding="utf-8"):
+            text = converted(item.path, target.read_text(encoding="utf-8", newline=""), template)
+            self.write(item.path, text.encode("utf-8"), item.executable)
+            self.report.append((item.path, msg("state_seed_converted")))
+        elif target.exists() and not previous and unwired(item.path, target.read_text(encoding="utf-8", errors="replace")):
+            text = converted(item.path, target.read_text(encoding="utf-8"), template)
+            self.write(item.path, text.encode("utf-8"), item.executable)
+            self.report.append((item.path, msg("state_seed_wired")))
+        elif target.exists() and item.path in self.placed and not previous:
+            self.write(item.path, content, item.executable)
+            self.report.append((item.path, msg("state_seed_adopted")))
+        elif target.exists() and previous.get("edition") not in (None, entry["edition"]):
+            self.notes.append((item.path, msg("state_seed_newer")))
+        elif target.exists():
             if previous:
                 self.unchanged += 1
             else:
                 self.notes.append((item.path, msg("state_seed_kept")))
         elif previous:
             self.notes.append((item.path, msg("state_seed_removed")))
+            entry = {key: value for key, value in {**entry, "edition": previous.get("edition")}.items() if value}
         else:
-            self.write(item.path, item.content, item.executable)
+            self.write(item.path, content, item.executable)
             self.report.append((item.path, msg("state_created")))
         return entry
 

@@ -31,7 +31,6 @@ from .catalog import (
 from .documents import json_indent, json_text, markers, merge_json
 from .resources import (
     PROJECT_BLOCK,
-    PROJECT,
     AREA_MAP,
     CONDITION,
     ENTRY,
@@ -43,7 +42,6 @@ from .resources import (
     MARKDOWN_LINK,
     METHODOLOGY,
     PLACEHOLDER,
-    place_of,
     Refusal,
     kit_root,
     layer_manifest,
@@ -246,24 +244,11 @@ def agent_config(path: str, text: str, servers: dict[str, dict]) -> str:
     return json_text(data)
 
 
-def relink(text: str, path: str, absent: set[str], references: dict[str, str]) -> str:
+def relink(text: str, path: str, absent: set[str]) -> str:
     def link(match: re.Match[str]) -> str:
         target = posixpath.normpath(posixpath.join(posixpath.dirname(path), match.group(2)))
-        if target in absent:
-            return match.group(1)
-        address = references.get(target)
-        return f"[{match.group(1)}]({address}{match.group(3) or ''})" if address else match.group(0)
+        return match.group(1) if target in absent else match.group(0)
     return MARKDOWN_LINK.sub(link, text)
-
-
-def reference_addresses(kit: dict) -> dict[str, str]:
-    base = f"{kit.get('repository', '')}/blob/{revision(kit)}/payload/"
-    return {path: base + path for path, meta in kit["files"].items() if meta.get("place") == "reference"} \
-        if kit.get("repository") else {}
-
-
-def revision(kit: dict) -> str:
-    return kit.get("commit") or f"v{kit['version']}"
 
 
 def absent_entries(kit: dict, paths: frozenset[str], catalog: dict) -> dict[str, dict]:
@@ -341,12 +326,11 @@ def fragment_folder(path: str) -> str:
 
 def plan(kit_dir: Path, kit: dict, catalog: dict, project: dict, root: Path, lock: dict) -> list[Item]:
     paths = enabled(project)
-    extra = {**computed(kit, project), "harness.placed": placed_lines(kit, catalog, paths)}
+    extra = computed(kit, project)
     absent = absent_paths(kit, paths, catalog)
     prune = registry_pruner(kit_dir, kit, paths) if absent else unpruned
     absent |= removed_seeds(kit, lock, root)
     servers = agent_servers(kit, catalog, project, paths)
-    references = reference_addresses(kit)
     items = []
     for path, meta in sorted(kit["files"].items()):
         if not wanted(meta, paths):
@@ -356,13 +340,11 @@ def plan(kit_dir: Path, kit: dict, catalog: dict, project: dict, root: Path, loc
         if meta.get("render"):
             text = render(data.decode("utf-8"), project, extra, path).rstrip("\r\n")
             data = (text + "\n" if text else "").encode("utf-8")
-        if path.endswith(".md") and (absent or references):
-            data = relink(data.decode("utf-8"), path, absent, references).encode("utf-8")
+        if path.endswith(".md") and absent:
+            data = relink(data.decode("utf-8"), path, absent).encode("utf-8")
         data = prune(path, data)
         if path == METHODOLOGY:
             data = disabled_modules(data.decode("utf-8"), kit, catalog, project).encode("utf-8")
-            for moved, address in references.items():
-                data = data.replace(f'"doc": "{moved}'.encode("utf-8"), f'"doc": "{address}'.encode("utf-8"))
         if path == AREA_MAP:
             data = app_areas(data.decode("utf-8"), project).encode("utf-8")
         if path in AGENT_SERVERS:
@@ -385,12 +367,6 @@ def plan(kit_dir: Path, kit: dict, catalog: dict, project: dict, root: Path, loc
         items.append(dotnet_wiring(root, posixpath.dirname(solution)))
     compile_agent_permissions(kit_dir, project, items)
     return items
-
-
-def placed_lines(kit: dict, catalog: dict, paths: frozenset[str]) -> str:
-    placed = {installed_path(path, meta, paths, catalog) for path, meta in kit["files"].items()
-              if wanted(meta, paths) and place_of(meta.get("role", "managed"), meta.get("place", "")) == "lock"}
-    return "\n".join(sorted("/" + path for path in placed | {INSTALLED_CATALOG}))
 
 
 def compile_agent_permissions(kit_dir: Path, project: dict, items: list[Item]) -> None:

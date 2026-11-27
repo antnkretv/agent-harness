@@ -128,7 +128,7 @@ def wanted(meta: dict, paths: frozenset[str]) -> bool:
     return missing_path(meta, paths) is None
 
 
-EXPLICIT_PLACES = ("shell", "reference")
+EXPLICIT_PLACES = ("shell",)
 
 
 def shipped_bytes(kit_dir: Path, path: str, meta: dict) -> bytes:

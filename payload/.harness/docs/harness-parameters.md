@@ -2,7 +2,7 @@
 
 > **Тип (Diataxis):** Справочник
 
-Справочник манифеста [`.harness/project/manifest.json`](../../../.harness/project/manifest.json) и модулей harness.
+Справочник манифеста [`.harness/project/manifest.json`](../project/manifest.json) и модулей harness.
 Устройство слоя, настройка и обновление - [harness.md](harness.md). Манифест строит
 настройка установщика комплекта (`ah init`, `ah change`) из ответов владельца; `apply` и `verify` проверяют его по каталогу модулей
 `.harness/state/modules.json` и отказывают с перечнем ошибок до записи первого файла.
@@ -15,18 +15,18 @@
 | `project.gitConfigPrefix` | префикс ключей `branch.<ветка>.<префикс>-pr` и `-issue` в git config | конвейер (`task-worktree.py`, `pipeline-run.py`, `forge.py open-change`), `commit-msg`, `pre-push` |
 | `git.baseBranch` | ветка разработки: база PR, сравнения гейтов и ревью | гейты, ревью, `issue-dev` |
 | `git.releaseBranch` | ветка релиза, отличная от базовой | модуль `release`, `issue-dev`, `forge-setup.py` |
-| `git.branchConvention` | конвенция имен веток агента и человека, вопрос настройки: `conventional` (`{тип}/{задача}-{слаг}`) или `gitflow` (`{поток}/{задача}-{слаг}`) - [`CONTRIBUTING.md` §2](../../../CONTRIBUTING.md#2-ветки) | выделение копии, `commit-msg`, `pre-push`, связь PR с задачей, привязка ветки |
+| `git.branchConvention` | конвенция имен веток агента и человека, вопрос настройки: `conventional` (`{тип}/{задача}-{слаг}`) или `gitflow` (`{поток}/{задача}-{слаг}`) - [`.harness/CONTRIBUTING.md` §2](../CONTRIBUTING.md#2-ветки) | выделение копии, `commit-msg`, `pre-push`, связь PR с задачей, привязка ветки |
 | `docs` | пути документации и классы текста ([раздел](#раздел-docs)) | гейты документов, текста и комментариев |
 | `apps[]` | приложения ([раздел](#приложение-apps)); пустой список допустим | гейты, области, хуки |
 | `modules` | модули, их расширения и настройки ([раздел](#модули)) | установщик, гейты, хуки, воркфлоу |
 | `agents` | версии CLI и именованные исполнители процессов ([раздел](#agents)) | установщик, запуск сессий, круг ревью |
-| `rules` | необязательно: снятые правила комплекта `disabled` и свои правила проекта `own` ([как снять правило](../../../.harness/README.md#как-снять-правило)) | `check-all.py`, `verify`, гейты документов и копий |
+| `rules` | необязательно: снятые правила комплекта `disabled` и свои правила проекта `own` ([как снять правило](../README.md#как-снять-правило)) | `check-all.py`, `verify`, гейты документов и копий |
 | `setup.snapshot` | необязательно: однострочные команды Bash подготовки снапшота окружения, идут из корня репозитория по порядку списка после общего тулчейна; отказ команды роняет подготовку; пустой список - шаги не настроены | `cloud-setup.sh` |
 | `setup.session` | необязательно: однострочные команды Bash старта сессии для того, что не переживает снапшот, например демона контейнеров; идут из корня репозитория по порядку списка, отказ называется и старт не останавливает; пустой список - шаги не настроены | `ensure-repo-deps.sh --steps` и `--only-steps`: хук старта удаленной сессии, `.cursor/start.sh --steps` |
 
 Обязательны все ключи, кроме `docs`, `rules` и `setup`. Без `docs` читатель берет значение по умолчанию, которое настройка и
 пишет. У идентичности запасных значений нет
-([`.harness/README.md`](../../../.harness/README.md#два-разных-отказа)).
+([`.harness/README.md`](../README.md#два-разных-отказа)).
 
 ### Приложение `apps[]`
 
@@ -72,13 +72,13 @@
 | Стек | Адаптер | Требования к проекту |
 | --- | --- | --- |
 | `node` | расширение `node` модуля стороны | корневые `package.json` с workspaces и lock-файл, `.node-version`, `eslint.config` приложения подключает конфиги `.config/`, ESLint и `@typescript-eslint/parser` в devDependencies |
-| `dotnet` | расширение `dotnet` модуля `backend` | `global.json` и `Directory.Packages.props` у решения, журнал диагностик сборки в SARIF; C# в раскладке CSharpier - манифест `.config/dotnet-tools.json` и настройки `.vscode` ставит комплект, раскладку держит гейт `dotnet-format` ([ci-cd](../delivery/ci-cd.md#форматирование-c)) |
-| `python`, `go`, `jvm`, `other` | нет | `entries.architecture` или `architectureWaiver` ([гейт стека](../architecture/gates.md#стек-без-адаптера)) |
+| `dotnet` | расширение `dotnet` модуля `backend` | `global.json` и `Directory.Packages.props` у решения, журнал диагностик сборки в SARIF; C# в раскладке CSharpier - манифест `.config/dotnet-tools.json` и настройки `.vscode` ставит комплект, раскладку держит гейт `dotnet-format` ([ci-cd](ci-cd.md#форматирование-c)) |
+| `python`, `go`, `jvm`, `other` | нет | `entries.architecture` или `architectureWaiver` ([гейт стека](../../docs/platform/architecture/gates.md#стек-без-адаптера)) |
 
 Стек `dotnet` или `node` ставит агентам разработки языковой сервер своего стека: мост MCP
-[`lsp-mcp.mjs`](../../../.harness/provisioning/scripts/lsp-mcp.mjs), установщик
-[`ensure-lsp.sh`](../../../.harness/provisioning/scripts/ensure-lsp.sh) и
-[`.lsp-mcp.json`](../../../.lsp-mcp.json) с серверами включенных стеков: `csharp-ls` у `dotnet`,
+[`lsp-mcp.mjs`](../provisioning/scripts/lsp-mcp.mjs), установщик
+[`ensure-lsp.sh`](../provisioning/scripts/ensure-lsp.sh) и
+[`.lsp-mcp.json`](../../.lsp-mcp.json) с серверами включенных стеков: `csharp-ls` у `dotnet`,
 `typescript-language-server` у `node`. Сервер `lsp` попадает в конфиг MCP каждого включенного агента
 ([`mcp`](#mcp)), а серверы ставят старт сессии и setup script облачного агента. Первый запуск моста
 доставляет недостающее сам, поэтому подключение сервера ждет до пяти минут: `MCP_TIMEOUT` в
@@ -93,13 +93,13 @@ C# - .NET SDK проекта.
 | `docs.instructionRoots` | `[""]` | каталоги с собственными `AGENTS.md` и `CLAUDE.md` |
 | `docs.machineTextPrefixes` | агент-активы, `.specify/`, `specs/`, промпты | машинный текст: правила письма к нему не применяются |
 | `docs.liveDocPrefixes` | `docs/features/` | живые документы фич |
-| `docs.typedPrefixes` | `docs/` | технические документы, которые объявляют тип Diataxis строкой под заголовком H1; ADR, `README.md`, имя с датой на конце, `historicalPrefixes` и машинный текст не проверяются ([`documentation.md`](../standards/documentation.md#тип-документа)) |
-| `docs.historicalPrefixes` | нет | датированные записи: исследования, журналы решений; ссылки в них - состояние на дату записи. [`check-adr-refs.py`](../../../.harness/scripts/check/check-adr-refs.py) не сверяет ссылки на ADR, [`check-tool-pins.py`](../../../.harness/scripts/check/check-tool-pins.py) - версии в Markdown. Исключение из гейта не снимает [правило снимков](../standards/documentation.md#живой-документ-и-снимок) |
+| `docs.typedPrefixes` | `docs/` | технические документы, которые объявляют тип Diataxis строкой под заголовком H1; ADR, `README.md`, имя с датой на конце, `historicalPrefixes` и машинный текст не проверяются ([`documentation.md`](../../docs/platform/standards/documentation.md#тип-документа)) |
+| `docs.historicalPrefixes` | нет | датированные записи: исследования, журналы решений; ссылки в них - состояние на дату записи. [`check-adr-refs.py`](../scripts/check/check-adr-refs.py) не сверяет ссылки на ADR, [`check-tool-pins.py`](../scripts/check/check-tool-pins.py) - версии в Markdown. Исключение из гейта не снимает [правило снимков](../../docs/platform/standards/documentation.md#живой-документ-и-снимок) |
 | `docs.generatedSegments`, `docs.generatedPrefixes` | `node_modules`, `bin`, `obj`, `dist`, миграции | сгенерированное: гейты автора его не разбирают |
 | `docs.vendoredSkills` | нет | подключенные поставки скиллов, тело которых правится обновлением; скиллы включенных пакетов модуля [`skills`](#skills) настройка вписывает сама, приемка отказывает манифесту без них |
 | `docs.payloadPrefixes` | нет | деревья поставки для других репозиториев: их проверяют гейты того дерева, а не этого |
 | `docs.checks` | нет | проверки документов, которые проект включает в гейте `docs-structure`: `index` - достижимость из `docs.index`, `names` - имена файлов, `adr-headers` - шапка ADR, `types` - тип Diataxis по `docs.typedPrefixes`, `status-lexicon` - словарь статусов в инструкциях, `size` - размер документа |
-| `docs.comments` | нет | правила гейта `comment-layer`: пределы `plain` и `doc` (`lines`, `words`, `chars`), `density` (`max`, `floor`), `constantFloor`, шаблоны `history`, `failure`, `moodGuard` и `traceability`. Ключи задаются вместе: неполный набор, в том числе без поля `plain`, `doc` или `density`, - отказ с именами недостающих; без ключа гейт пишет "не настроено" ([стандарт комментариев](../standards/code-comments.md#8-порог-объема)) |
+| `docs.comments` | нет | правила гейта `comment-layer`: пределы `plain` и `doc` (`lines`, `words`, `chars`), `density` (`max`, `floor`), `constantFloor`, шаблоны `history`, `failure`, `moodGuard` и `traceability`. Ключи задаются вместе: неполный набор, в том числе без поля `plain`, `doc` или `density`, - отказ с именами недостающих; без ключа гейт пишет "не настроено" ([стандарт комментариев](../../docs/platform/standards/code-comments.md#8-порог-объема)) |
 
 Настройка спрашивает `generatedSegments`, `generatedPrefixes`, `machineTextPrefixes`,
 `liveDocPrefixes`, `historicalPrefixes` и `vendoredSkills` вопросами `docs.<ключ>`: детектор
@@ -111,18 +111,18 @@ C# - .NET SDK проекта.
 Настройки окружения - переменные, которые человек задает своей машине: токены поставщика кода и трекера,
 выбор исполнителя и интерпретатора. Их значения не входят в манифест и в git.
 
-- [`.harness/settings.defaults.env`](../../../.harness/settings.defaults.env) - файл комплекта: все
+- [`.harness/settings.defaults.env`](../settings.defaults.env) - файл комплекта: все
   настройки с значениями по умолчанию, строка `ИМЯ=значение`. `apply` пишет его версией комплекта.
 - `.harness/settings.env` - файл человека вне git: строку `/.harness/settings.env` держит блок комплекта
   `.gitignore`. Его один раз создает `apply` копией значений по умолчанию и дальше не трогает. Рабочая
-  копия задачи получает ссылку на файл основного клона ([`task-worktree.py`](../../../.harness/README.md#авторская-рабочая-копия)).
+  копия задачи получает ссылку на файл основного клона ([`task-worktree.py`](../README.md#авторская-рабочая-копия)).
 - Порядок чтения: переменная окружения, затем `settings.env`, затем `settings.defaults.env`. Пустое значение
   настройку не задает. Кавычки не снимаются: значение идет до конца строки.
-- Читает файлы общий загрузчик [`python.sh`](../../../.harness/lib/python.sh), а под Windows -
-  [`python.cmd`](../../../.harness/hooks/python.cmd): настройки получают все скрипты комплекта на Python и
+- Читает файлы общий загрузчик [`python.sh`](../lib/python.sh), а под Windows -
+  [`python.cmd`](../hooks/python.cmd): настройки получают все скрипты комплекта на Python и
   скрипты bash, которые подключают его реестр сообщений.
 - Агентам чтение `settings.env` закрыто: правило `deny` в `.claude/settings.json` и `.cursor/cli.json` и
-  отказ хука [`agent-gate.py`](../../../.harness/hooks/agent-gate.py) на команду оболочки с путем файла.
+  отказ хука [`agent-gate.py`](../hooks/agent-gate.py) на команду оболочки с путем файла.
 
 | Настройка | Модуль | Что задает |
 | --- | --- | --- |
@@ -220,7 +220,7 @@ C# - .NET SDK проекта.
 
 | Расширение | Что ставит |
 | --- | --- |
-| `frontend/node` | границы слоев ESLint `.config/eslint-boundaries.js`, хук ESLint по файлу, гейт `node-adapter` ([gates.md](../architecture/gates.md#node)) |
+| `frontend/node` | границы слоев ESLint `.config/eslint-boundaries.js`, хук ESLint по файлу, гейт `node-adapter` ([gates.md](../../docs/platform/architecture/gates.md#node)) |
 
 | Настройка | Вид | Форма | Что задает |
 | --- | --- | --- | --- |
@@ -263,7 +263,7 @@ Runner. Установщик пишет пул в файлы CI списком; 
 | `runners/github-actions` | метки `runs-on` заданий GitHub Actions; требует `forge/github` |
 | `runners/gitlab-runner` | теги `tags` заданий GitLab CI; требует `forge/gitlab` |
 
-Файлы и задания каждого вида - [таблица видов](../delivery/ci-cd.md#переключатели-раннеров).
+Файлы и задания каждого вида - [таблица видов](ci-cd.md#переключатели-раннеров).
 Пул вида `review`, `agent`, `triage` и `release` настройка спрашивает, только когда включен модуль этой
 роли - `review`, `issue-agent`, `alert-triage`, `release` (поле `requires` настройки); иначе остается значение
 по умолчанию.
@@ -286,7 +286,7 @@ Codex с входом ChatGPT требует свой раннер: `CODEX_HOME/
 ### `tracker`
 
 Трекер задач, отдельно от поставщика кода. Модуль ставит гейт связи PR с задачей
-`check-pr-issue-link.py` и, с поставщиком кода, [задание закрытия задач](../delivery/ci-cd.md#закрытие-задач)
+`check-pr-issue-link.py` и, с поставщиком кода, [задание закрытия задач](ci-cd.md#закрытие-задач)
 после мержа в `git.baseBranch`. Выключен - ветки задач и связь PR с задачей не проверяются, а задачи после
 мержа не закрываются.
 
@@ -308,7 +308,7 @@ Codex с входом ChatGPT требует свой раннер: `CODEX_HOME/
 Задача трекера Jira - ключ `PROJ-123`, ветка задачи по конвенции `git.branchConvention`, например
 `feat/PROJ-123-слаг` или `feature/PROJ-123-слаг`. Связь запроса с задачей - ключ в описании: `Closes PROJ-123` закрывает задачу
 после мержа запроса в `git.baseBranch`, `Refs PROJ-123` ее называет. Закрывает задачу не поставщик кода, а
-[задание закрытия](../delivery/ci-cd.md#закрытие-задач) переходом `tracker/jira.doneTransition`, а без этой
+[задание закрытия](ci-cd.md#закрытие-задач) переходом `tracker/jira.doneTransition`, а без этой
 настройки - единственным переходом задачи в статус категории `done`. Ветку и запрос Jira
 связывает с задачей сама по ключу; `link-branch.py` с Jira не ставится.
 
@@ -329,10 +329,10 @@ Codex с входом ChatGPT требует свой раннер: `CODEX_HOME/
 | --- | --- | --- | --- |
 | `agents.cli` | `decision` | `object` | корневой объект `agents.cli` проекта: `claudeVersion`, `codexVersion`, `cursorVersion`, `nodeVersion`; версии CLI и Node для их установки |
 | `agents.tools` | `decision` | `object` | корневая карта `agents.tools` проекта: записи `issue-agent` и `alert-triage` с полями `allowedTools` и `disallowedTools` - разрешенные и запрещенные инструменты агента в CI через запятую. Модель и усилие не настраиваются: модель задает комплект по провайдеру (`KINDS` в `agent_provider.py`), усилие - по процессу (`efforts` методологии) |
-| `agents.findings` | `decision` | `choice` | попутная находка вне постановки: `same-pr` (по умолчанию) - чинится в этом PR, `separate-pr` - отдельным PR, `report` - называется в PR без починки, `ignore` - не трогается; дефект, внесенный самим PR, чинится в нем при любом значении ([CONTRIBUTING §10](../../../CONTRIBUTING.md#10-находки-по-пути)) |
+| `agents.findings` | `decision` | `choice` | попутная находка вне постановки: `same-pr` (по умолчанию) - чинится в этом PR, `separate-pr` - отдельным PR, `report` - называется в PR без починки, `ignore` - не трогается; дефект, внесенный самим PR, чинится в нем при любом значении ([CONTRIBUTING §10](../CONTRIBUTING.md#10-находки-по-пути)) |
 | `agents.review` | `decision` | `choice` | круги ревью сессии конвейера без флага `--review`: `ci` (по умолчанию) - круги в CI, локальный круг заменяет недоступный и Ready не дает; `local` - круги идут локально и доводят PR до Ready. Читается с базовой ветки задачи. Выключенный модуль `review` на той же базе дает локальный круг и эту настройку не читает |
 | `agents.pushback` | `decision` | `choice` | спор агента с постановщиком задачи: `full` - каждое утверждение проверяется, агент называет пробелы и спорные места в архитектуре, требованиях, производительности и сложности кода и предлагает лучшее решение; `critical` (по умолчанию) - оспариваются только отклонения от архитектуры, требований и логики; `none` - агент не спорит. Тем же значением шаг `speckit-market` решает, оспаривать ли ответы `clarify`. Уточнение по вопросу запрашивается один раз: выбор человека закрывает вопрос |
-| `agents.envScript` | `fact` | `text` | скрипт проекта от корня репозитория, который по `--export` печатает команды `export` окружения запуска стека. Его подключает после общего тулчейна [`session-env.sh`](../../../.harness/provisioning/scripts/session-env.sh): в файлах старта Bash, в файле окружения удаленной сессии и при запуске серверов MCP с командой; пусто - только общий тулчейн |
+| `agents.envScript` | `fact` | `text` | скрипт проекта от корня репозитория, который по `--export` печатает команды `export` окружения запуска стека. Его подключает после общего тулчейна [`session-env.sh`](../provisioning/scripts/session-env.sh): в файлах старта Bash, в файле окружения удаленной сессии и при запуске серверов MCP с командой; пусто - только общий тулчейн |
 
 `agents.cli` и `agents.tools` - решения `static` ([настройка](harness.md#настройка)): их
 меняет правка манифеста и `ah change`, `pack` переносит их в архив под решения. Они лежат в корне манифеста; выбор агента остается
@@ -364,7 +364,7 @@ Codex с входом ChatGPT требует свой раннер: `CODEX_HOME/
 Круг ревью PR агентами в CI; требует `forge` и `ci-agent`. Модуль ставит круг у площадки - `code-review.yml` у
 GitHub, `.gitlab/ci/review.yml` с дочерним конвейером `.gitlab/ci/review-round.yml` у GitLab, - его
 шаги `review-round.py`, запуск сессии агента `agent-run.py`, план и публикатор вердикта, гейт метки
-круга ([ci-cd](../delivery/ci-cd.md)). Выключен - ревью идет локальным кругом скилла `review`. Исполнителя
+круга ([ci-cd](ci-cd.md)). Выключен - ревью идет локальным кругом скилла `review`. Исполнителя
 задает модуль `ci-agent`.
 
 ### `issue-agent`
@@ -380,7 +380,7 @@ GitHub, `.gitlab/ci/review.yml` с дочерним конвейером `.gitla
 
 Стенды проекта: чтение диагностики стенда агентами через MCP. Расширение ставит инструмент
 `.harness/mcp-stand/` - экземпляр на стенд со своим конфигом, учетными данными и сетью
-([README](../../../.harness/mcp-stand/README.md)) - и сервер MCP каждого стенда у агентов разработки:
+([README](../mcp-stand/README.md)) - и сервер MCP каждого стенда у агентов разработки:
 `.mcp.json` у Claude Code, `.cursor/mcp.json` у Cursor, `.codex/config.toml` у Codex. Вход агента
 разработки - OAuth экземпляра. Выключен - агенты стенды через MCP не читают.
 
@@ -404,15 +404,15 @@ GitHub, `.gitlab/ci/review.yml` с дочерним конвейером `.gitla
 | --- | --- |
 | `mcp/context7` | документация библиотек по версиям, `https://mcp.context7.com/mcp` |
 | `mcp/parallel-search` | поиск в вебе, `https://search-mcp.parallel.ai/mcp` |
-| `mcp/docker` | шлюз `docker mcp gateway run` к серверам каталога Docker; настройка предлагает его, когда в дереве есть `Dockerfile` или файл compose. Плагин `docker mcp` там, где его нет, ставит [`ensure-docker-mcp.sh`](../../../.harness/provisioning/scripts/ensure-docker-mcp.sh); запуск шлюза ждет команду `docker` и ответ демона, а при пустом списке каталогов загружает каталог серверов `mcp/docker-mcp-catalog` из реестра Docker Hub, без доступа к реестру или после 45 секунд загрузки шлюз стартует без серверов |
+| `mcp/docker` | шлюз `docker mcp gateway run` к серверам каталога Docker; настройка предлагает его, когда в дереве есть `Dockerfile` или файл compose. Плагин `docker mcp` там, где его нет, ставит [`ensure-docker-mcp.sh`](../provisioning/scripts/ensure-docker-mcp.sh); запуск шлюза ждет команду `docker` и ответ демона, а при пустом списке каталогов загружает каталог серверов `mcp/docker-mcp-catalog` из реестра Docker Hub, без доступа к реестру или после 45 секунд загрузки шлюз стартует без серверов |
 | `mcp/refero` | образцы интерфейсов, `https://api.refero.design/mcp`; требует `frontend` |
 | `mcp/mobbin` | образцы интерфейсов приложений, `https://api.mobbin.com/mcp`; требует `frontend` |
 | `mcp/aspire` | сервер `aspire agent mcp` для AppHost Aspire; требует `stack/dotnet`, настройка предлагает его по SDK `Aspire.AppHost.Sdk` в дереве. Aspire CLI без команды `aspire agent` сервер не запускает |
 
 Сервер с командой, `mcp/docker` и `mcp/aspire`, запускает
-[`mcp-launch.mjs`](../../../.harness/provisioning/scripts/mcp-launch.mjs): клиент MCP стартует серверы
+[`mcp-launch.mjs`](../provisioning/scripts/mcp-launch.mjs): клиент MCP стартует серверы
 раньше хука старта сессии и окружение сессии не наследует. На Linux и macOS запуск идет в окружении
-[`session-env.sh`](../../../.harness/provisioning/scripts/session-env.sh): общий тулчейн и скрипт
+[`session-env.sh`](../provisioning/scripts/session-env.sh): общий тулчейн и скрипт
 [`agents.envScript`](#agents); на Windows команда берется из PATH пользователя.
 
 ### `alert-triage`
@@ -421,7 +421,7 @@ GitHub, `.gitlab/ci/review.yml` с дочерним конвейером `.gitla
 конвейер `alert-triage.yml`, шаги и инструмент телеметрии `alert-triage.py` и промпт агента. Отбор
 читает алерты через Grafana и ведет issue на ключ алерта; агент читает Prometheus, Loki и Tempo
 через прокси источников той же Grafana по путям маршрута раннера разбора
-([ci-cd](../delivery/ci-cd.md#разбор-алертов)). Выключен - алерты разбирает дежурный. Токен записи
+([ci-cd](ci-cd.md#разбор-алертов)). Выключен - алерты разбирает дежурный. Токен записи
 агента - секрет `AGENT_GITHUB_TOKEN`. Исполнителя задает модуль `ci-agent`.
 
 | Настройка | Вид | Форма | Что задает |
@@ -461,7 +461,7 @@ Git-хуки harness. С включенным модулем `apply` стави�
 
 | Расширение | Что ставит |
 | --- | --- |
-| `sdd/speckit` | Spec Kit: `.specify/`, скиллы `speckit-*`, `specs/README.md`, гейт реестра требований ([delivery/sdd](../delivery/sdd.md)) |
+| `sdd/speckit` | Spec Kit: `.specify/`, скиллы `speckit-*`, `specs/README.md`, гейт реестра требований ([delivery/sdd](sdd.md)) |
 
 ### `prose`
 
@@ -529,7 +529,7 @@ ADR правилом `HumanizedText.Glossary` проверяется как лю
 
 | Расширение | Что ставит |
 | --- | --- |
-| `release/tag-flow` | `release.py` и конвейер релиза площадки - `release.yml` и `release-cut.yml` с заготовкой `project-deploy.yml` у GitHub, `.gitlab/ci/release.yml` с дочерним конвейером `release-pipeline.yml` и заготовкой `project-deploy.yml` у GitLab: версия из тега, срез `release/*`, хотфикс, обратное слияние ([ci-cd](../delivery/ci-cd.md#релиз)); [сессия релиза](../delivery/ci-cd.md#сессия-релиза) - вызов `/release` и skill `release`, без модуля `/release` отказывает |
+| `release/tag-flow` | `release.py` и конвейер релиза площадки - `release.yml` и `release-cut.yml` с заготовкой `project-deploy.yml` у GitHub, `.gitlab/ci/release.yml` с дочерним конвейером `release-pipeline.yml` и заготовкой `project-deploy.yml` у GitLab: версия из тега, срез `release/*`, хотфикс, обратное слияние ([ci-cd](ci-cd.md#релиз)); [сессия релиза](ci-cd.md#сессия-релиза) - вызов `/release` и skill `release`, без модуля `/release` отказывает |
 
 | Настройка | Вид | Форма | Что задает |
 | --- | --- | --- | --- |
@@ -538,7 +538,7 @@ ADR правилом `HumanizedText.Glossary` проверяется как лю
 ### `notifications`
 
 Уведомления конвейера: каналы - расширения модуля, рассылку ставит `.harness/notify/`
-([ci-cd](../delivery/ci-cd.md#уведомления)). Выключен - итог релиза остается в сводке прогона CI.
+([ci-cd](ci-cd.md#уведомления)). Выключен - итог релиза остается в сводке прогона CI.
 
 | Расширение | Что ставит |
 | --- | --- |
@@ -582,14 +582,14 @@ ADR правилом `HumanizedText.Glossary` проверяется как лю
 
 ## Конвейер issue-dev
 
-Композиции объявлены в [`.harness/pipelines.json`](../../../.harness/pipelines.json): только ссылки
+Композиции объявлены в [`.harness/pipelines.json`](../pipelines.json): только ссылки
 на процессы, зависимости и переходы. Определения процессов, промпты и политики лежат в
-[`.harness/methodology.json`](../../../.harness/methodology.json); исполнители и версии CLI - в
+[`.harness/methodology.json`](../methodology.json); исполнители и версии CLI - в
 `agents` манифеста проекта. Связи сверяет
-[`check-pipeline.py`](../../../.harness/scripts/check/check-pipeline.py), исполнение и подтверждения стадий -
-[`pipeline-run.py`](../../../.harness/scripts/pipeline/pipeline-run.py), инструкции агента -
-[`issue-dev`](../../../.agents/skills/issue-dev/SKILL.md).
-[`forge-setup.py`](../../../.harness/scripts/release/forge-setup.py) ставит недостающие метки, сверяет по
+[`check-pipeline.py`](../scripts/check/check-pipeline.py), исполнение и подтверждения стадий -
+[`pipeline-run.py`](../scripts/pipeline/pipeline-run.py), инструкции агента -
+[`issue-dev`](../../.agents/skills/issue-dev/SKILL.md).
+[`forge-setup.py`](../scripts/release/forge-setup.py) ставит недостающие метки, сверяет по
 именам секреты включенных расширений, у GitLab заводит вебхук событий и печатает владельцу то, чего
 сделать не может: защиту веток и свои раннеры.
 
@@ -600,7 +600,7 @@ ADR правилом `HumanizedText.Glossary` проверяется как лю
 | секрет `CURSOR_API_KEY` | исполнитель `cursor` |
 | секрет `CODEX_API_KEY` | исполнитель `codex` с `auth` = `api-key` |
 | секрет `AGENT_GITHUB_TOKEN` | правки, комментарии, метки и PR агента задач и разбора алертов: права `contents`, `pull-requests` и `issues` на запись |
-| секрет `release/tag-flow.token` | с модулем `release` - по умолчанию `RELEASE_TOKEN`: ветки и PR среза и обратного слияния от учетной записи владельца токена; fine-grained PAT с правами `contents`, `pull-requests` и `workflows` на запись ([ci-cd](../delivery/ci-cd.md#релиз)) |
+| секрет `release/tag-flow.token` | с модулем `release` - по умолчанию `RELEASE_TOKEN`: ветки и PR среза и обратного слияния от учетной записи владельца токена; fine-grained PAT с правами `contents`, `pull-requests` и `workflows` на запись ([ci-cd](ci-cd.md#релиз)) |
 | секреты разбора алертов | с модулем `alert-triage` - `alert-triage.auth` и `alert-triage.notifyToken`, в окружении `alert-triage.environment`, если оно задано; переменная `alert-triage.selectRunnerVar` - метки раннеров отбора в JSON |
 | секрет `ISSUE_LINK_TOKEN` | привязка ветки к задаче и закрытие задач после мержа; без него воркфлоу берут `GITHUB_TOKEN`, и при нехватке его прав привязка отказывает в журнале прогона, а закрытие - предупреждением |
 | защита ветки | ставит владелец по списку, который печатает `forge-setup.py` |
@@ -615,9 +615,9 @@ ADR правилом `HumanizedText.Glossary` проверяется как лю
 | переменная секрета трекера | с `tracker/jira` - секрет `tracker/jira.token`, по умолчанию `JIRA_TOKEN`, protected и masked, значения по окружениям: `harness` - токен конвейера, `harness-agent` - отдельный токен учетной записи агента, `review-read` - токен только для чтения задач для проходов круга. |
 | переменные токенов стендов | с модулем `stands` - имена из `stands/mcp-stand.list[].token`: protected и masked с окружением `harness*` |
 | переменные исполнителя | `CLAUDE_CODE_OAUTH_TOKEN`, `CURSOR_API_KEY` или `CODEX_API_KEY` (у `codex` с `auth` = `api-key`) по расширению модуля `ci-agent` |
-| вебхук событий | события Merge request и Comments на адрес триггера конвейера ветки `git.baseBranch` ([ci-cd](../delivery/ci-cd.md#события-gitlab)); `forge-setup.py` переносит прежний вебхук комплекта с другой ветки |
+| вебхук событий | события Merge request и Comments на адрес триггера конвейера ветки `git.baseBranch` ([ci-cd](ci-cd.md#события-gitlab)); `forge-setup.py` переносит прежний вебхук комплекта с другой ветки |
 | версия | GitLab 16.10 и новее: `workflow:rules:auto_cancel` |
-| свои задания и `workflow` проекта | в файлах `include` с правилом `if: $HARNESS_PIPELINE == null`, не в `.gitlab-ci.yml` ([ci-cd](../delivery/ci-cd.md#события-gitlab)) |
+| свои задания и `workflow` проекта | в файлах `include` с правилом `if: $HARNESS_PIPELINE == null`, не в `.gitlab-ci.yml` ([ci-cd](ci-cd.md#события-gitlab)) |
 
 Роль Maintainer видит значения переменных CI/CD: учетные записи `AGENT_GITLAB_TOKEN` и `GITLAB_READ_TOKEN`
 ее не получают.

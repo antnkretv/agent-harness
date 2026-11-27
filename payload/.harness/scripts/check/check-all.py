@@ -2,7 +2,7 @@
 """Все гейты проекта одним прогоном: реестр правил, области диффа и проверки приложений.
 
 Провайдер CI зовет только этот вход, поэтому состав проверок у всех провайдеров один.
-Порядок, условия и отказы - docs/platform/delivery/ci-cd.md, раздел "Гейт проекта".
+Порядок, условия и отказы - .harness/docs/ci-cd.md, раздел "Гейт проекта".
 
     ./.harness/hooks/python.cmd .harness/scripts/check/check-all.py --base origin/develop
     ./.harness/hooks/python.cmd .harness/scripts/check/check-all.py --list             # план без запуска

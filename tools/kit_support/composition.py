@@ -18,6 +18,7 @@ from installer.catalog import (
     wanted,
 )
 from installer.documents import block_of, entry_markers, markers
+from installer.links import installed_links, installed_test
 from installer.render import fragment_folder
 from installer.verify import twice
 from installer.resources import (
@@ -34,6 +35,7 @@ from installer.resources import (
     SKILLS,
     SETTINGS_DEFAULTS,
     STACKS_WITH_ADAPTER,
+    place_of,
 )
 
 from .catalog_checks import catalog_paths, catalog_problems, setting_holders
@@ -118,9 +120,12 @@ def composition(kit: dict) -> list[str]:
         if templated:
             problems += condition_problems(path, text, paths)
         if meta.get("role") == "block":
+            if path.endswith(".md"):
+                problems.append(msg("kit_block_markdown", path))
             for begin, end in (entry_markers(path, meta), markers(path, PROJECT_BLOCK)):
                 if block_of(text, begin, end) is None:
                     problems.append(msg("kit_block_markers", path, begin))
+    problems += project_link_problems(kit)
     problems += notification_problems(kit, modules)
     problems += adapter_problems(kit, modules)
     problems += wiring_problems(kit, files, paths)
@@ -271,6 +276,17 @@ def catalog_items(modules: dict) -> dict[str, tuple[str, str] | None]:
 
 def item_module(item: str) -> str:
     return item.split(".")[0].split("/")[0]
+
+
+def project_link_problems(kit: dict) -> list[str]:
+    placed = {path for path, meta in kit["files"].items() if place_of(meta.get("role", "managed"), meta.get("place", "")) == "lock"}
+    installed = installed_test(set(kit["files"]) - placed, placed)
+    problems = []
+    for path in sorted(set(kit["files"]) - placed):
+        if path.endswith(".md"):
+            text = (KIT / "payload" / path).read_text(encoding="utf-8")
+            problems += [msg("kit_project_link", path, number, target) for number, target in installed_links(path, text, installed)]
+    return problems
 
 
 def reference_problems(kit: dict, modules: dict) -> list[str]:

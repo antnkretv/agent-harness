@@ -9,7 +9,7 @@
 **Input**: User description: "$ARGUMENTS"
 
 <!--
-  Правила проекта (см. .specify/memory/constitution.md и docs/platform/delivery/sdd.md):
+  Правила проекта (см. .specify/memory/constitution.md и .harness/docs/sdd.md):
   - Язык спеки — РУССКИЙ.
   - Требования — в нотации EARS, с приоритетом MUST/SHOULD/COULD и статусом as-is (✅ есть / 🟡 частично / 🔴 нет).
     Статус as-is описывает состояние ДО трека и после реализации не пересматривается.
