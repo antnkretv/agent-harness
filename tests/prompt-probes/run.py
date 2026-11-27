@@ -153,7 +153,7 @@ def build_kit(ref: str, folder: str) -> str:
 
 def install(kit: str, tree: str) -> None:
     """Пустой проект без стека: ответы сценария лежат в answers.json, на прочие вопросы init без терминала берет
-    ответ по умолчанию. Сборка --before старше init без терминала пробу не поставит."""
+    ответ по умолчанию."""
     os.makedirs(tree)
     git("init", "-q", "-b", "develop", cwd=tree)
     git("remote", "add", "origin", f"https://github.com/{PROBE_REPO}.git", cwd=tree)
