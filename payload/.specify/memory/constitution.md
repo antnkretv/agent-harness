@@ -77,13 +77,13 @@ ADR. Конституция держит одно правило: расшире
 
 ### Runtime-guidance для агентов
 
-[`AGENTS.md`](../../AGENTS.md), [`CLAUDE.md`](../../CLAUDE.md), [`CONTRIBUTING.md`](../../CONTRIBUTING.md)
-(git-стандарт), `.harness/docs/sdd.md`.
+[`AGENTS.md`](../../AGENTS.md), [`CLAUDE.md`](../../CLAUDE.md), `.harness/CONTRIBUTING.md` (git-стандарт), [`CONTRIBUTING.md`](../../CONTRIBUTING.md)
+проекта, `.harness/docs/sdd.md`.
 
 ## Development Workflow & Quality Gates
 
 Порядок конвейера, артефакты трека, рыночная сверка и трассировка - `.harness/docs/sdd.md`;
-git - [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
+git - `.harness/CONTRIBUTING.md` и [`CONTRIBUTING.md`](../../CONTRIBUTING.md) проекта.
 
 - **Constitution Check** в `plan.md` - обязательный гейт перед дизайном и после него.
 - **Verify-гейт:** зеленый перед мержем; команды - в [Дельте проекта](#дельта-проекта).
