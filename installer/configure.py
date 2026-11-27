@@ -603,6 +603,8 @@ def migrate(answers: dict, reopened: dict, catalog: dict, alone: set) -> None:
 def reopen_all(answers: dict, reopened: dict) -> None:
     for key in list(answers):
         by = answers[key].get("by")
+        if key.startswith("apps.") and key.rsplit(".", 1)[-1] in APP_FACTS:
+            continue
         if by in ("detected", "default"):
             del answers[key]
         elif by != PACKED:
@@ -670,6 +672,9 @@ def settle(root: Path, given: dict | None = None, change: bool = False, strict: 
         state["manifest"] = sha256(text.encode("utf-8"))
         state["manifestKeys"] = sorted(answers_from(project, catalog))
         problems = validate(project, root, catalog)
+        for key, value in reopened.items():
+            answers.setdefault(key, {"value": value, "by": "owner"})
+        reopened.clear()
     state["alone"] = sorted(alone & set(reopened))
     write_answers(root, state)
     return pending, problems, session.answered

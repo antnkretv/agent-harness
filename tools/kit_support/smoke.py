@@ -946,6 +946,14 @@ class Smoke:
         resumed = self.prompter({}, "change")
         self.check(msg("smoke_prompt_resume"), resumed.get("asked", [None])[0] == "modules.githooks"
                    and "stack" not in resumed.get("asked", []))
+        project = self.read_json(PROJECT)
+        rule = {"id": "prose", "reason": msg("smoke_no_forge_reason"), "replacement": msg("smoke_no_forge_reason")}
+        project["rules"] = {"disabled": [rule]}
+        self.write_json(PROJECT, project)
+        again = [self.prompter({}, "change"), self.prompter({}, "change")]
+        self.check(msg("smoke_prompt_rules"), all(again) and self.read_json(PROJECT).get("rules", {}).get("disabled") == [rule]
+                   and {"stack", "defaults"} <= set(again[1].get("asked", []))
+                   and not self.read_json(ANSWERS).get("reopened"))
 
     def prompter(self, keys: dict, command: str) -> dict:
         done = run([sys.executable, "-B", "-c", PROMPTER, str(self.kit), str(self.repo), json.dumps(keys), command], self.repo)

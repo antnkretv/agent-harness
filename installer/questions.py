@@ -232,6 +232,8 @@ class Session:
 
     def value(self, key: str, parse, default, decision: bool = False):
         self.seen.add(key)
+        if key in self.reopened and key not in self.answers:
+            self.answers[key] = {"value": self.reopened.pop(key), "by": "owner"}
         value = self.stored(key, parse)
         if value is MISSING:
             return default
