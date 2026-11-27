@@ -10,15 +10,11 @@ kit.repository, а без kit.commit скачивает архив выпуск�
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import runpy
-import shutil
 import subprocess
 import sys
-import tarfile
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,7 +31,7 @@ MSG_download='ah: архив выпуска %s не скачан: %s. Перед
 MSG_fetch='ah: коммит %s комплекта не получен из %s: %s. Передайте архив флагом --archive'
 MSG_hook_usage='ah: после hook нужно имя хука из .harness/hooks'
 MSG_hook_unknown='в .harness/hooks нет хука %s'
-MSG_hook_refused='ah: выполните python3 .harness/ah.py install: %s'
+MSG_hook_refused='выполните python3 .harness/ah.py install: %s'
 MSG_hook_runner='ah: хук %s не запущен: %s'
 
 
@@ -44,6 +40,8 @@ def msg(key: str, *args: object) -> str:
 
 
 def tree_digest(files) -> str:
+    import hashlib
+
     return hashlib.sha256("".join(f"{name}\0{hashlib.sha256(data).hexdigest()}\n"
                                   for name, data in sorted(files)).encode("utf-8")).hexdigest()
 
@@ -55,6 +53,10 @@ def genuine(top: Path, tree: str) -> bool:
 
 
 def unpacked(archive: Path, home: Path, tree: str) -> Path:
+    import shutil
+    import tarfile
+    import tempfile
+
     CACHE.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=".unpack-", dir=CACHE))
     try:
@@ -90,6 +92,9 @@ def isolated() -> dict:
 
 
 def built(source: Path, commit: bool = False) -> Path:
+    import shutil
+    import tempfile
+
     CACHE.mkdir(parents=True, exist_ok=True)
     out = Path(tempfile.mkdtemp(prefix=".build-", dir=CACHE))
     if subprocess.run([sys.executable, str(source / "tools" / "kit.py"), "build", "--out", str(out), *(["--commit"] if commit else [])],
@@ -101,6 +106,9 @@ def built(source: Path, commit: bool = False) -> Path:
 
 
 def fetched(repository: str, ref: str) -> Path:
+    import shutil
+    import tempfile
+
     CACHE.mkdir(parents=True, exist_ok=True)
     work, env = Path(tempfile.mkdtemp(prefix=".fetch-", dir=CACHE)), isolated()
     for command in (["init", "-q"], ["fetch", "-q", "--depth", "1", repository, ref], ["checkout", "-q", "--detach", "FETCH_HEAD"]):
@@ -116,6 +124,8 @@ def fetched(repository: str, ref: str) -> Path:
 
 
 def from_source(source: Path, tree: str) -> Path:
+    import shutil
+
     archive = built(source, True)
     try:
         return unpacked(archive, CACHE / tree, tree)
@@ -128,6 +138,9 @@ def release(kit: dict) -> str:
 
 
 def downloaded(kit: dict) -> Path:
+    import shutil
+    import tempfile
+
     import urllib.request
 
     url = release(kit)
@@ -143,6 +156,8 @@ def downloaded(kit: dict) -> Path:
 
 
 def place(kit: dict, archive: "Path | None", home: Path, tree: str) -> None:
+    import shutil
+
     if archive is not None:
         unpacked(archive, home, tree)
     elif kit.get("commit") and kit.get("repository"):
@@ -227,14 +242,9 @@ def installed() -> str:
     return "" if done.returncode == 0 else said[-1] if said else str(done.returncode)
 
 
-def refused(reason: str) -> int:
-    print(msg("hook_refused", reason[len("ah: "):] if reason.startswith("ah: ") else reason), file=sys.stderr)
-    try:
-        payload = json.load(sys.stdin)
-    except (OSError, ValueError):
-        payload = {}
-    looping = isinstance(payload, dict) and (payload.get("stop_hook_active") is True or (payload.get("loop_count") or 0) > 0)
-    return 0 if looping else 2
+def refused(reason: str, rest: list[str]) -> int:
+    print(msg("hook_refused", reason), file=sys.stderr)
+    return 0 if "stop" in rest else 2
 
 
 def hook(args: list[str]) -> int:
@@ -250,7 +260,7 @@ def hook(args: list[str]) -> int:
         reason = installed()
         script = hook_script(name)
         if reason or script is None:
-            return refused(reason or msg("hook_unknown", name))
+            return refused(reason or msg("hook_unknown", name), rest)
     os.environ["AGENT_PROJECT_DIR"] = ROOT.as_posix()
     if script.suffix == ".py":
         sys.argv, sys.path[0] = [str(script), *rest], str(script.parent)

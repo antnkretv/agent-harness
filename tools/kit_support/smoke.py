@@ -18,7 +18,7 @@ from installer.resources import (ANSWERS, LOADER, AREA_MAP, CONFIG, GUIDES, LEGA
                                  rewrite_lock, sha256)
 from installer.resources import msg as kit_msg
 from installer.resources import unpack
-from installer.lock_install import archive_build, loader
+from installer.lock_install import archive_build, git_file, loader
 from installer.verify import run_gate
 
 from .context import KIT, catalog, msg
@@ -753,8 +753,7 @@ class Smoke:
         shutil.rmtree(gone)
         for tree in trees[1:]:
             run(["git", "merge", "-q", "--ff-only", "develop"], tree)
-        exclude = Path(run(["git", "rev-parse", "--git-path", "info/exclude"], self.repo).stdout.strip())
-        exclude = exclude if exclude.is_absolute() else self.repo / exclude
+        exclude = git_file(self.repo, "info/exclude")
         run([sys.executable, str(self.repo / LOADER), "install"], self.repo)
         pruned = not any(f"worktrees/{name}" in exclude.read_text(encoding="utf-8") for name in ("tree-gone", "tree-codex"))
         passed = True

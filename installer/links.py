@@ -4,7 +4,7 @@ import posixpath
 import re
 from collections.abc import Callable
 
-LINK = re.compile(r"(\(?)(?<!!)\[([^\]\n]+)\]\(([^)\s#]*)(#[^)\s]*)?\)(\)?)")
+LINK = re.compile(r"(?<!!)\[([^\]\n]+)\]\(([^)\s#]*)")
 SPAN = re.compile(r"(`+)(?!`).*?(?<!`)\1(?!`)")
 FENCE = re.compile(r"^[ \t]*(```|~~~)")
 ENTRY = ("AGENTS.md", ".harness/README.md")
@@ -53,9 +53,9 @@ def installed_links(source: str, text: str, installed: Callable[[str], bool]) ->
     for number, line in prose_lines(text):
         code = code_spans(line)
         for match in LINK.finditer(line):
-            if in_code(code, match.start(2)):
+            if in_code(code, match.start(1)):
                 continue
-            target = target_of(source, match.group(3))
+            target = target_of(source, match.group(2))
             if target and not allowed(source, target) and installed(target):
                 found.append((number, target))
     return found

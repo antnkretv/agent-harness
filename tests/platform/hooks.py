@@ -32,7 +32,8 @@ FILE_GATE_HOOKS = (
 SHARED_LINT = ".harness/hooks/forge-text-lint.py"
 GATE = ".harness/hooks/agent-gate.py"
 SESSION_START = ".harness/hooks/session-start.sh"
-HOOK = ".harness/ah.py\" hook ", ".harness/ah.py hook "
+CLAUDE_HOOK = '.harness/ah.py" hook '
+PLAIN_HOOK = ".harness/ah.py hook "
 SESSION_ENV = ".harness/provisioning/scripts/session-env.sh"
 NEXT_STEP = "./.harness/hooks/python.cmd .harness/scripts/pipeline/pipeline-run.py next change"
 AGENT_RUN = ("HARNESS_AGENT_RUN",)
@@ -79,29 +80,29 @@ def check_configs() -> None:
         codex_hooks = codex.get("hooks", {})
         # Хук текстов ставит модуль forge: без поставщика кода проверять нечего.
         if (ROOT / SHARED_LINT).exists():
-            expect_hook(codex_hooks.get("preToolUse", []), HOOK[1] + "forge-text-lint cursor", "Cursor preToolUse")
-        expect_hook(codex_hooks.get("sessionStart", []), HOOK[1] + "session-start cursor", "Cursor sessionStart")
-        expect_hook(codex_hooks.get("preToolUse", []), HOOK[1] + "agent-deny cursor", "Cursor preToolUse")
+            expect_hook(codex_hooks.get("preToolUse", []), PLAIN_HOOK + "forge-text-lint cursor", "Cursor preToolUse")
+        expect_hook(codex_hooks.get("sessionStart", []), PLAIN_HOOK + "session-start cursor", "Cursor sessionStart")
+        expect_hook(codex_hooks.get("preToolUse", []), PLAIN_HOOK + "agent-deny cursor", "Cursor preToolUse")
         for event in ("beforeSubmitPrompt", "preToolUse", "stop"):
-            expect_hook(codex_hooks.get(event, []), HOOK[1] + "agent-gate cursor", "Cursor " + event)
+            expect_hook(codex_hooks.get(event, []), PLAIN_HOOK + "agent-gate cursor", "Cursor " + event)
 
     if (ROOT / ".codex" / "hooks.json").is_file():
         native = read_json(ROOT / ".codex" / "hooks.json").get("hooks", {})
         for event in ("UserPromptSubmit", "PreToolUse", "Stop"):
-            expect_hook(flatten(native.get(event, [])), HOOK[1] + "agent-gate codex", "Codex " + event)
+            expect_hook(flatten(native.get(event, [])), PLAIN_HOOK + "agent-gate codex", "Codex " + event)
 
     if (ROOT / ".claude").is_dir():
         claude_hooks = read_json(ROOT / ".claude" / "settings.json").get("hooks", {})
         if (ROOT / SHARED_LINT).exists():
-            expect_hook(flatten(claude_hooks.get("PreToolUse", [])), HOOK[0] + "forge-text-lint claude", "Claude PreToolUse")
-        expect_hook(flatten(claude_hooks.get("SessionStart", [])), HOOK[0] + "session-start claude", "Claude SessionStart")
+            expect_hook(flatten(claude_hooks.get("PreToolUse", [])), CLAUDE_HOOK + "forge-text-lint claude", "Claude PreToolUse")
+        expect_hook(flatten(claude_hooks.get("SessionStart", [])), CLAUDE_HOOK + "session-start claude", "Claude SessionStart")
         for event in ("UserPromptSubmit", "PreToolUse", "Stop"):
-            expect_hook(flatten(claude_hooks.get(event, [])), HOOK[0] + "agent-gate claude", "Claude " + event)
+            expect_hook(flatten(claude_hooks.get(event, [])), CLAUDE_HOOK + "agent-gate claude", "Claude " + event)
         # Хук ESLint подключает адаптер node вместе с его конфигами: без них проверять файлу нечем.
         adapted = (ROOT / ".config" / "eslint-boundaries.js").is_file()
         for hook in FILE_GATE_HOOKS:
             if adapted or "eslint" not in hook:
-                expect_hook(flatten(claude_hooks.get("PostToolUse", [])), HOOK[0] + Path(hook).stem, "Claude PostToolUse")
+                expect_hook(flatten(claude_hooks.get("PostToolUse", [])), CLAUDE_HOOK + Path(hook).stem, "Claude PostToolUse")
 
 
 def probe_env(drop: tuple[str, ...] = (), **extra: str) -> dict[str, str]:

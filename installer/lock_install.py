@@ -17,7 +17,7 @@ from .verify import installed_kit
 RECORD = "harness/installed.json"
 EXCLUDE = "info/exclude"
 SECTION = "# harness:begin ", "# harness:end "
-LOCK_TRIES, LOCK_PAUSE = 100, 0.05
+LOCK_TRIES, LOCK_PAUSE, LOCK_STALE = 100, 0.05, 60
 
 
 def archive_build(archive: Path) -> tuple[str, dict, str]:
@@ -76,6 +76,12 @@ def claimed(lock: Path) -> int:
         try:
             return os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o644)
         except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > LOCK_STALE:
+                    lock.unlink(missing_ok=True)
+                    continue
+            except FileNotFoundError:
+                continue
             time.sleep(LOCK_PAUSE)
     raise Refusal(msg("install_exclude_busy", lock))
 
@@ -86,26 +92,24 @@ def exclude(root: Path, paths: list[str]) -> None:
     live = worktrees(root)
     target.parent.mkdir(parents=True, exist_ok=True)
     lock = target.with_name(target.name + ".lock")
-    handle, placed = claimed(lock), False
+    handle = claimed(lock)
     try:
-        text = target.read_text(encoding="utf-8") if target.is_file() else ""
-        own, sections = exclude_sections(text)
-        sections = {name: lines for name, lines in sections.items()
-                    if name != key and os.path.normcase(os.path.realpath(name)) in live}
-        sections[key] = ["/" + path for path in sorted(paths)]
-        lines = own + [line for name, found in sections.items() for line in (SECTION[0] + name, *found, SECTION[1] + name)]
-        fresh = "\n".join(lines) + "\n"
-        if fresh != text:
-            os.write(handle, fresh.encode("utf-8"))
-            os.close(handle)
-            handle = -1
-            os.replace(lock, target)
-            placed = True
-    finally:
-        if handle != -1:
-            os.close(handle)
-        if not placed:
-            lock.unlink(missing_ok=True)
+        with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as out:
+            text = target.read_text(encoding="utf-8") if target.is_file() else ""
+            own, sections = exclude_sections(text)
+            sections = {name: lines for name, lines in sections.items()
+                        if name != key and os.path.normcase(os.path.realpath(name)) in live}
+            sections[key] = ["/" + path for path in sorted(paths)]
+            lines = own + [line for name, found in sections.items() for line in (SECTION[0] + name, *found, SECTION[1] + name)]
+            fresh = "\n".join(lines) + "\n"
+            out.write(fresh)
+    except BaseException:
+        lock.unlink(missing_ok=True)
+        raise
+    if fresh == text:
+        lock.unlink(missing_ok=True)
+    else:
+        os.replace(lock, target)
 
 
 def recorded(record: Path) -> list[str]:
